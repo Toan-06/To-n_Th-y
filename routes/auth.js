@@ -12,7 +12,7 @@ const Itinerary = require('../models/Itinerary');
 const Conversation = require('../models/Conversation');
 const Place = require('../models/Place');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'wander-viet-secret-key-123';
+const JWT_SECRET = (process.env.JWT_SECRET || 'wander-viet-secret-key-123').trim();
 const DEFAULT_ADMIN_EMAIL = process.env.DEFAULT_ADMIN_EMAIL || 'admin@wanderviet.com';
 const DEFAULT_ADMIN_PASSWORD = process.env.DEFAULT_ADMIN_PASSWORD || 'password@2006';
 
@@ -122,7 +122,11 @@ const verifyPortalToken = (expectedPortal) => async (req, res, next) => {
     
     next();
   } catch (err) {
-    console.error('JWT Verification Error:', err.message);
+    if (err.name === 'JsonWebTokenError' && err.message === 'invalid signature') {
+      console.warn(`[Auth] Signature mismatch from ${req.ip}. Cleared stale token on server.`);
+    } else {
+      console.error('JWT Verification Error:', err.message);
+    }
     return res.status(401).json({ success: false, message: 'Auth: JWT verification failed', error: err.message });
   }
 };

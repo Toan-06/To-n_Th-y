@@ -7,7 +7,7 @@ const flexibleAuth = verifyPortalToken(null);
 const jwt = require('jsonwebtoken');
 const Notification = require('../models/Notification');
 const logAction = require('../utils/logger');
-const JWT_SECRET = process.env.JWT_SECRET || 'wander-viet-secret-key-123';
+const JWT_SECRET = (process.env.JWT_SECRET || 'wander-viet-secret-key-123').trim();
 
 // Middleware to check user role
 const checkRole = (roles) => {

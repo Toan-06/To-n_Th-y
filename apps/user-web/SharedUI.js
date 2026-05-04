@@ -53,6 +53,10 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
       if (response.status === 403 && data && data.message && data.message.includes('bị khóa')) {
         showSuspendedModal();
       }
+      if (response.status === 401 && !url.includes('/login') && !url.includes('/register')) {
+        localStorage.removeItem('wander_token');
+        localStorage.removeItem('wander_admin_token');
+      }
     } catch(e) { }
     return response;
   };
@@ -485,6 +489,7 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
              <li><a href="planner.html" class="nav-link" data-link="ai-planner">🤖 AI Trợ lý</a></li>
              <li><a href="social-hub.html" class="nav-link" data-link="social">👥 Cộng đồng</a></li>
              <li><a href="quests.html" class="nav-link" data-link="quests">🎯 Nhiệm vụ</a></li>
+             <li><a href="history.html" class="nav-link" data-link="history">⏳ Lịch sử</a></li>
              <li><a href="leaderboard.html" class="nav-link" data-link="leaderboard">🏆 BXH</a></li>
              <li><a href="business-services.html" class="nav-link" data-link="business">🏨 Doanh nghiệp</a></li>
           </ul>
@@ -1968,7 +1973,7 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
     initAll();
   }
 
-  return { setTheme, toggleTheme, showToast, setButtonLoading, toggleNotificationDrawer, updateNotificationBadge, markAsRead, markAllAsRead, syncAuthUI, forceLogout, toggleUserMenu, openAuthModal, confirm };
+  return { setTheme, toggleTheme, showToast, setButtonLoading, toggleNotificationDrawer, updateNotificationBadge, markAsRead, markAllAsRead, syncAuthUI, forceLogout, toggleUserMenu, openAuthModal, confirm, openPlaceDetail };
 })());
 
 

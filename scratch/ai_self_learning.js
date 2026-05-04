@@ -16,27 +16,27 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
  */
 async function runSelfLearning() {
   console.log("🔄 Bắt đầu chạy tiến trình AI Self-Learning (Memory Extraction)...");
-  
+
   try {
     // 1. Tìm những user có tương tác trong 24h qua (Ví dụ lấy 10 user)
     // Để test, lấy tất cả user có role 'user'
     const users = await User.find({ role: 'user' }).limit(10);
-    
+
     for (let user of users) {
       console.log(`\nPhân tích User: ${user.name} (${user._id})`);
-      
+
       // 2. Lấy 30 tin nhắn gần nhất của user này
       const recentChats = await Conversation.find({ userId: user._id.toString(), role: 'user' })
         .sort({ timestamp: -1 })
         .limit(30);
-        
+
       if (recentChats.length < 3) {
         console.log("   -> Chưa đủ dữ liệu chat (Cần ít nhất 3 tin nhắn), bỏ qua.");
         continue;
       }
-      
+
       const chatTexts = recentChats.map(c => c.text).join('\n- ');
-      
+
       // 3. Dùng LLM để phân tích
       const prompt = `
 Bạn là một AI phân tích hành vi người dùng. 
@@ -51,36 +51,36 @@ Ví dụ:
 - Quan tâm đến giá cả (Tiết kiệm)
 - Hay đi cùng gia đình
       `;
-      
+
       const completion = await groq.chat.completions.create({
         messages: [{ role: "system", content: prompt }],
         model: "llama-3.1-8b-instant",
         temperature: 0.2,
         max_tokens: 100
       });
-      
+
       const responseText = completion.choices[0]?.message?.content || "";
       const insights = responseText.split('\n')
         .map(i => i.replace(/^- /, '').trim())
         .filter(i => i.length > 0 && i.length < 50);
-        
+
       if (insights.length > 0) {
         console.log("   🧠 AI Insights tìm thấy:", insights);
-        
+
         // 4. Cập nhật vào DB
         if (!user.preferenceProfile) {
           user.preferenceProfile = { aiInsights: [], lastAnalyzed: new Date() };
         }
-        
+
         // Ghi đè (hoặc merge) insights mới
         user.preferenceProfile.aiInsights = insights;
         user.preferenceProfile.lastAnalyzed = new Date();
-        
+
         await user.save();
         console.log("   ✅ Đã cập nhật vào hồ sơ User!");
       }
     }
-    
+
     console.log("\n🎉 Hoàn thành tiến trình Self-Learning!");
   } catch (error) {
     console.error("❌ Lỗi:", error);

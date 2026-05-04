@@ -412,7 +412,8 @@ router.get('/:bizId/chat', async (req, res) => {
     if (token) {
       try {
         const jwt = require('jsonwebtoken');
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'wander-secret');
+        const secret = (process.env.JWT_SECRET || 'wander-viet-secret-key-123').trim();
+        const decoded = jwt.verify(token, secret);
         userId = decoded.id; userName = decoded.name || 'Khách';
       } catch(e) {}
     }
@@ -432,7 +433,8 @@ router.post('/:bizId/chat', async (req, res) => {
     const jwt = require('jsonwebtoken');
     const token = req.headers['x-auth-token'];
     if (!token) return res.status(401).json({ success: false, message: 'Cần đăng nhập' });
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'wander-secret');
+    const secret = (process.env.JWT_SECRET || 'wander-viet-secret-key-123').trim();
+        const decoded = jwt.verify(token, secret);
     const { text } = req.body;
     if (!text || !text.trim()) return res.status(400).json({ success: false, message: 'Tin nhắn rỗng' });
     const msg = new BusinessMessage({
