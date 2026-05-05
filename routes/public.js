@@ -52,4 +52,22 @@ router.get('/business/:id', async (req, res) => {
   }
 });
 
+// GET /api/public/destinations - Lấy danh sách địa điểm nổi bật/mới
+router.get('/destinations', async (req, res) => {
+  try {
+    const { featured, limit } = req.query;
+    const query = { status: 'approved' };
+    if (featured === 'true') query.isFeatured = true;
+
+    const destinations = await Place.find(query)
+      .sort({ createdAt: -1 })
+      .limit(parseInt(limit) || 10)
+      .select('name image description rating location category');
+      
+    res.json({ success: true, data: destinations });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 module.exports = router;

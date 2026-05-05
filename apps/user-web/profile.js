@@ -507,55 +507,122 @@ const UserProfile = {
 
     loadDiary: async function() {
         const content = document.getElementById('profile-tab-content');
+        if (!this.profileUserId) return;
+        
+        let html = '';
+        
+        // Add FB-style Post Composer if own profile
+        if (this.isOwnProfile) {
+            html += `
+                <div class="fb-card composer-card" style="padding:12px 16px;">
+                    <div style="display:flex;gap:12px;align-items:center;margin-bottom:12px;">
+                        <img src="${this.user.avatar || 'assets/default-avatar.svg'}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;">
+                        <div style="flex:1;background:#3a3b3c;border-radius:20px;padding:8px 16px;color:#b0b3b8;cursor:pointer;" onclick="window.location.href='social-hub.html'">
+                            Bạn đang nghĩ gì?
+                        </div>
+                    </div>
+                    <div style="display:flex;padding-top:8px;border-top:1px solid rgba(255,255,255,0.1);justify-content:space-around;font-size:0.9rem;font-weight:600;color:#b0b3b8;">
+                        <span style="display:flex;align-items:center;gap:8px;cursor:pointer;"><i style="color:#f3425f;">📹</i> Video trực tiếp</span>
+                        <span style="display:flex;align-items:center;gap:8px;cursor:pointer;"><i style="color:#45bd62;">🖼️</i> Ảnh/video</span>
+                        <span style="display:flex;align-items:center;gap:8px;cursor:pointer;"><i style="color:#f7b928;">😊</i> Cảm xúc/hoạt động</span>
+                    </div>
+                </div>
+            `;
+        }
+
         try {
-            const res = await fetch(`/api/social/posts/user/${this.profileUserId}`, { headers: { 'x-auth-token': localStorage.getItem('wander_token') } });
+            const res = await fetch(`/api/social/posts/user/${this.profileUserId}`, { 
+                headers: { 'x-auth-token': localStorage.getItem('wander_token') } 
+            });
             const data = await res.json();
             if (data.success && data.data.length > 0) {
-                // Collect photos for the sidebar grid while we're at it
+                // Collect photos for the sidebar grid
                 const allPhotos = [];
                 data.data.forEach(p => {
                     if (p.media) p.media.forEach(m => allPhotos.push(m.url));
                 });
                 this.updatePhotoGrid(allPhotos);
 
-                content.innerHTML = data.data.map(post => {
-                    // Sync avatar if it's the current user
-                    const displayAvatar = (this.isOwnProfile && post.userId === this.user._id) 
-                        ? (this.user.avatar || 'assets/default-avatar.svg') 
-                        : (post.userAvatar || 'assets/default-avatar.svg');if(!dataet.erorHandled){this.dataset.errorHandled='true';this.sr}
+                content.innerHTML = html + data.data.map(post => {
+                    const displayAvatar = (this.isOwnProfile && post.userId === this.user?._id) 
+                        ? (this.user?.avatar || 'assets/default-avatar.svg') 
+                        : (post.userAvatar || 'assets/default-avatar.svg');
 
                     return `
-                        <div class="glass-card post-card" style="margin-bottom:1rem;padding:1rem;">
-                            <div class="post-header" style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-                                <img src="${displayAvatar}" class="avatar-sm" alt="" onerror="this.src='assets/default-avatar.svg'">
-                                <div><h4 style="margin:0;font-size:0.95rem">${post.userName}</h4><span style="font-size:0.78rem;color:var(--text-muted)">${this.formatTime(post.createdAt)}</span></div>
+                        <div class="glass-card post-card" style="margin-bottom:1.5rem;padding:1.25rem;">
+                            <div class="post-header" style="display:flex;align-items:center;gap:12px;margin-bottom:15px;">
+                                <img src="${displayAvatar}" class="avatar-sm" alt="" onerror="if(!this.dataset.errorHandled){this.dataset.errorHandled='true';this.src='assets/default-avatar.svg'}">
+                                <div style="flex:1;">
+                                    <h4 style="margin:0;font-size:0.95rem;color:#fff;">${post.userName}</h4>
+                                    <span style="font-size:0.75rem;color:var(--text-muted)">${this.formatTime(post.createdAt)}</span>
+                                </div>
+                                <button class="btn-xs btn--ghost" style="opacity:0.6;">•••</button>
                             </div>
-                            <p style="margin:0 0 8px;line-height:1.6">${post.content}</p>
-                            ${post.media?.length > 0 ? `<div style="border-radius:12px;overflow:hidden;margin-top:8px;">${post.media.map(m => `<img src="${m.url}" style="width:100%;max-height:400px;object-fit:cover;" onerror="this.style.display='none'">`).join('')}</div>` : ''}
-                            <div style="display:flex;gap:16px;margin-top:10px;font-size:0.85rem;color:var(--text-muted)">
-                                <span>❤️ ${post.likes?.length || 0} thích</span>
-                                <span>💬 ${post.comments?.length || 0} bình luận</span>
+                            <div class="post-content" style="font-size:0.95rem;line-height:1.6;color:rgba(255,255,255,0.9);margin-bottom:12px;">
+                                ${post.content}
+                            </div>
+                            ${post.media?.length > 0 ? `
+                                <div class="post-media-grid" style="display:grid;grid-template-columns:repeat(${Math.min(post.media.length, 2)}, 1fr);gap:8px;border-radius:16px;overflow:hidden;margin-bottom:15px;">
+                                    ${post.media.map(m => `
+                                        <img src="${m.url}" style="width:100%;max-height:450px;object-fit:cover;cursor:pointer;" onclick="UserProfile.viewImage('${m.url}')" onerror="this.style.display='none'">
+                                    `).join('')}
+                                </div>
+                            ` : ''}
+                            <div class="post-footer" style="display:flex;align-items:center;gap:20px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.05);">
+                                <button class="post-action-btn" onclick="UserProfile.toggleLike('${post._id}')" style="background:none;border:none;color:var(--text-muted);display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.85rem;">
+                                    <span style="font-size:1.1rem;">❤️</span> ${post.likes?.length || 0}
+                                </button>
+                                <button class="post-action-btn" onclick="UserProfile.focusComment('${post._id}')" style="background:none;border:none;color:var(--text-muted);display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.85rem;">
+                                    <span style="font-size:1.1rem;">💬</span> ${post.comments?.length || 0}
+                                </button>
                             </div>
                         </div>
                     `;
                 }).join('');
             } else {
-                content.innerHTML = '<div class="glass-card" style="text-align:center;padding:60px;"><p style="font-size:2rem;margin-bottom:8px;">📝</p><p style="color:var(--text-muted)">Chưa có bài viết nào.</p></div>';
+                content.innerHTML = html + `
+                    <div class="profile-empty-state">
+                        <i>📝</i>
+                        <p>Chưa có bài viết nào trong nhật ký.</p>
+                        ${this.isOwnProfile ? '<button class="btn btn--primary" style="margin-top:15px;" onclick="window.location.href=\'social-hub.html\'">Đăng bài ngay</button>' : ''}
+                    </div>
+                `;
             }
-        } catch (err) { content.innerHTML = '<p class="error">Lỗi tải bài viết.</p>'; }
+        } catch (err) { 
+            console.error(err);
+            content.innerHTML = '<div class="glass-card" style="padding:40px;text-align:center;"><p class="error">Không thể tải bài viết. Vui lòng thử lại sau.</p></div>'; 
+        }
     },
 
     loadTrips: async function() {
         const content = document.getElementById('profile-tab-content');
         if (this.isOwnProfile && this.user?.savedTrips?.length > 0) {
-            content.innerHTML = this.user.savedTrips.map(trip => `
-                <div class="glass-card" style="padding:1.25rem;margin-bottom:1rem;">
-                    <h4 style="margin:0 0 8px;">🗺️ ${trip.name}</h4>
-                    <p style="color:var(--text-muted);font-size:0.85rem;margin:0;">${trip.stops?.length || 0} điểm dừng</p>
+            content.innerHTML = `
+                <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(300px, 1fr));gap:1.5rem;">
+                    ${this.user.savedTrips.map(trip => `
+                        <div class="glass-card trip-summary-card" style="padding:1.5rem;position:relative;overflow:hidden;cursor:pointer;" onclick="window.location.href='planner.html?tripId=${trip._id}'">
+                            <div style="position:relative;z-index:2;">
+                                <h4 style="margin:0 0 10px;color:#fff;display:flex;align-items:center;gap:10px;">
+                                    <span style="font-size:1.4rem;">🗺️</span> ${trip.name}
+                                </h4>
+                                <div style="display:flex;gap:15px;font-size:0.8rem;color:var(--text-muted);">
+                                    <span>📍 ${trip.stops?.length || 0} địa điểm</span>
+                                    <span>📅 ${this.formatTime(trip.updatedAt || trip.createdAt)}</span>
+                                </div>
+                            </div>
+                            <div style="position:absolute;right:-10px;bottom:-10px;font-size:5rem;opacity:0.05;transform:rotate(-15deg);">🎒</div>
+                        </div>
+                    `).join('')}
                 </div>
-            `).join('');
+            `;
         } else {
-            content.innerHTML = '<div class="glass-card" style="text-align:center;padding:60px;"><p style="font-size:2rem;margin-bottom:8px;">🎒</p><p style="color:var(--text-muted)">Chưa có chuyến đi nào.</p></div>';
+            content.innerHTML = `
+                <div class="profile-empty-state">
+                    <i>🎒</i>
+                    <p>${this.isOwnProfile ? 'Bạn chưa lưu chuyến đi nào. Hãy bắt đầu lên kế hoạch ngay!' : 'Người dùng này chưa có chuyến đi công khai.'}</p>
+                    ${this.isOwnProfile ? '<button class="btn btn--primary" style="margin-top:15px;" onclick="window.location.href=\'planner.html\'">Lên kế hoạch</button>' : ''}
+                </div>
+            `;
         }
     },
 
@@ -616,12 +683,40 @@ const UserProfile = {
     },
 
     updatePhotoGrid: function(photos) {
-        const grid = document.getElementById('photo-preview-grid');
-        if (!grid || !photos || photos.length === 0) return;
+        const grid = document.getElementById('profile-photos-preview');
+        if (!grid) return;
+        if (!photos || photos.length === 0) {
+            grid.innerHTML = '<p style="grid-column:1/-1;text-align:center;color:var(--text-muted);font-size:0.8rem;padding:20px;">Chưa có ảnh nào.</p>';
+            return;
+        }
         
-        // Show only last 6-9 photos
+        // Show only last 9 photos
         const slice = photos.slice(0, 9);
-        grid.innerHTML = slice.map(src => `<img src="${src}" style="width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:8px;" onerror="this.style.display='none'">`).join('');
+        grid.innerHTML = slice.map(src => `
+            <div style="position:relative;overflow:hidden;border-radius:12px;aspect-ratio:1/1;background:rgba(255,255,255,0.05);">
+                <img src="${src}" style="width:100%;height:100%;object-fit:cover;transition:0.3s;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'" onclick="UserProfile.viewImage('${src}')" onerror="this.style.display='none'">
+            </div>
+        `).join('');
+    },
+
+    viewImage: function(url) {
+        const overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:9999;display:flex;align-items:center;justify-content:center;cursor:zoom-out;backdrop-filter:blur(10px);';
+        overlay.innerHTML = `<img src="${url}" style="max-width:95vw;max-height:95vh;object-fit:contain;border-radius:8px;box-shadow:0 0 50px rgba(0,0,0,0.5);">`;
+        overlay.onclick = () => overlay.remove();
+        document.body.appendChild(overlay);
+    },
+
+    toggleLike: async function(postId) {
+        // Simple like toggle logic
+        try {
+            await fetch('/api/social/like', { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json', 'x-auth-token': localStorage.getItem('wander_token') }, 
+                body: JSON.stringify({ targetId: postId, targetType: 'post' }) 
+            });
+            this.loadDiary(); // Refresh
+        } catch (err) {}
     }
 };
 

@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 // Kết nối đến DB dành riêng cho Travel Planner
-const plannerUri = process.env.PLANNER_MONGODB_URI || process.env.MONGODB_URI;
+const plannerUri = (process.env.PLANNER_MONGODB_URI || process.env.MONGODB_URI || "").trim();
 
 if (!plannerUri) {
   console.warn('⚠️  PLANNER_MONGODB_URI is not defined in .env! Planner features may not work properly.');

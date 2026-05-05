@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 // Kết nối đến DB dành riêng cho Chatbot
-const chatbotUri = process.env.CHATBOT_MONGODB_URI;
+const chatbotUri = (process.env.CHATBOT_MONGODB_URI || "").trim();
 
 if (!chatbotUri) {
   console.warn('⚠️  CHATBOT_MONGODB_URI is not defined in .env! Chatbot features may not work properly.');

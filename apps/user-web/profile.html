@@ -19,23 +19,25 @@
                 <button class="btn-edit-cover" id="btn-edit-cover">📷 Chỉnh sửa ảnh bìa</button>
             </div>
             <div class="container profile-main-info">
-                <div class="profile-avatar-large">
+                <div class="profile-avatar-circle">
                     <img src="assets/default-avatar.svg" id="user-avatar-big" alt="Avatar">
                     <button class="btn-change-avatar" id="btn-change-avatar">📷</button>
                 </div>
-                <div class="profile-text-info">
-                    <h1 id="user-display-name">Đang tải...</h1>
-                    <p id="user-bio" class="user-bio">Chưa có tiểu sử.</p>
-                    <div class="profile-meta">
-                        <span id="user-id-tag" class="glass-chip">Mã số: user...</span>
-                        <span id="user-rank-badge" class="rank-badge">Hạng Đồng I</span>
+                <div class="profile-header-details">
+                    <div class="profile-text-info">
+                        <h1 id="user-display-name">Đang tải...</h1>
+                        <p id="user-bio" class="user-bio">Chưa có tiểu sử.</p>
+                        <div class="profile-meta">
+                            <span id="user-id-tag" class="meta-link">ID: user...</span>
+                            <span id="user-rank-badge" class="meta-link">Hạng Đồng I</span>
+                        </div>
                     </div>
-                </div>
-                <div class="profile-header-actions">
-                    <button class="btn btn--primary" id="edit-profile-btn">✏️ Chỉnh sửa hồ sơ</button>
-                    <div id="profile-social-btns" style="display:none;gap:8px;">
-                        <button class="btn btn--primary" id="btn-add-friend">➕ Kết bạn</button>
-                        <button class="btn btn--primary" id="btn-send-message" style="display:none;">💬 Nhắn tin</button>
+                    <div class="profile-header-actions">
+                        <button class="btn btn--primary" id="edit-profile-btn">✏️ Chỉnh sửa hồ sơ</button>
+                        <div id="profile-social-btns" style="display:none;gap:8px;">
+                            <button class="btn btn--primary" id="btn-add-friend">➕ Kết bạn</button>
+                            <button class="btn btn--primary" id="btn--secondary" id="btn-send-message" style="display:none;">💬 Nhắn tin</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -56,19 +58,27 @@
             </section>
             <!-- Cột Trái: Thông tin giới thiệu -->
             <aside class="profile-aside">
-                <div class="glass-card info-card">
-                    <h4>Giới thiệu</h4>
+                <div class="fb-card info-card">
+                    <h4>Thông tin cá nhân</h4>
                     <ul class="info-list">
                         <li>📍 Sống tại <strong id="user-location">Việt Nam</strong></li>
                         <li>📅 Tham gia từ <strong id="user-joined">04/2024</strong></li>
                         <li>⭐ <strong id="user-points">0</strong> Điểm tích lũy</li>
                     </ul>
+                    <button class="btn btn--full btn--ghost" style="margin-top:10px;">Chỉnh sửa chi tiết</button>
                 </div>
 
-                <div class="glass-card photos-card">
+                <div class="fb-card featured-card">
+                    <h4>Đáng chú ý</h4>
+                    <div class="featured-grid">
+                        <div class="featured-item empty"><span>+</span></div>
+                    </div>
+                </div>
+
+                <div class="fb-card photos-card">
                     <div class="card-header">
                         <h4>Ảnh</h4>
-                        <a href="#">Xem tất cả</a>
+                        <a href="#" class="blue-link">Xem tất cả ảnh</a>
                     </div>
                     <div class="photos-grid" id="profile-photos-preview">
                         <!-- Injected via JS -->
