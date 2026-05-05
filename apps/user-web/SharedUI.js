@@ -325,6 +325,31 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
     return 'wv_' + base;
   }
 
+  function trackQuestActivity(key, value) {
+    try {
+      var storeKey = getStoreKey('quest_activity');
+      var data = JSON.parse(localStorage.getItem(storeKey) || '{}');
+      var d = new Date();
+      var today = new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+      if (data.date !== today) {
+        data = { date: today };
+      }
+      data[key] = Math.max(data[key] || 0, value || 1);
+      localStorage.setItem(storeKey, JSON.stringify(data));
+    } catch(e) {}
+  }
+
+  function getQuestActivity(key) {
+    try {
+      var storeKey = getStoreKey('quest_activity');
+      var data = JSON.parse(localStorage.getItem(storeKey) || '{}');
+      var d = new Date();
+      var today = new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+      if (data.date !== today) return 0;
+      return data[key] || 0;
+    } catch(e) { return 0; }
+  }
+
   // ─── Auth Sync ──────────────────────────────────────────────────
   function toggleUserMenu(open) {
     const userToggle = document.querySelector('[data-user-toggle]');
@@ -2083,7 +2108,7 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
     initAll();
   }
 
-  return { setTheme, toggleTheme, showToast, setButtonLoading, toggleNotificationDrawer, updateNotificationBadge, markAsRead, markAllAsRead, syncAuthUI, forceLogout, toggleUserMenu, openAuthModal, confirm, openPlaceDetail, getRankBadgeHTML, getRankIcon, getStoreKey, initSettingsHandlers };
+  return { setTheme, toggleTheme, showToast, setButtonLoading, toggleNotificationDrawer, updateNotificationBadge, markAsRead, markAllAsRead, syncAuthUI, forceLogout, toggleUserMenu, openAuthModal, confirm, openPlaceDetail, getRankBadgeHTML, getRankIcon, getStoreKey, initSettingsHandlers, trackQuestActivity, getQuestActivity };
 })());
 
 

@@ -43,46 +43,73 @@
     .quest-hero__capsule {
       display: inline-flex;
       align-items: center;
-      gap: 1rem;
-      background: var(--bg-card);
-      padding: 0.5rem 1.5rem 0.5rem 0.5rem;
-      border-radius: 50px;
-      border: 1px solid var(--border);
-      margin-top: 1.5rem;
-      box-shadow: var(--shadow-sm);
+      gap: 1.5rem;
+      background: rgba(30, 41, 59, 0.5);
+      backdrop-filter: blur(12px);
+      padding: 0.75rem 2rem 0.75rem 0.75rem;
+      border-radius: 100px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      margin-top: 2rem;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+      position: relative;
     }
+
     .quest-hero__capsule-badge {
-      background: var(--bg-soft);
-      padding: 0.35rem 0.75rem;
+      background: rgba(0,0,0,0.2);
+      padding: 0.5rem;
       border-radius: 50px;
-      font-weight: 800;
-      font-size: 0.85rem;
       display: flex;
       align-items: center;
+      justify-content: center;
+      box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);
+      min-width: 60px;
+      min-height: 60px;
+    }
+
+    .quest-hero__capsule-progress-wrap {
+      display: flex;
+      flex-direction: column;
       gap: 6px;
-      text-transform: uppercase;
-      border: 1px solid var(--border);
     }
-    .quest-hero__capsule-badge .rank-text {
-      color: var(--text);
-    }
+
     .quest-hero__capsule-progress {
-      width: 200px;
-      height: 6px;
-      background: var(--bg-soft);
+      width: 240px;
+      height: 12px;
+      background: rgba(0, 0, 0, 0.4);
       border-radius: 10px;
       overflow: hidden;
+      box-shadow: inset 0 1px 3px rgba(0,0,0,0.6);
+      position: relative;
     }
+
     .quest-hero__capsule-fill {
       height: 100%;
-      background: #8b5cf6;
-      box-shadow: 0 0 10px rgba(139, 92, 246, 0.5);
-      transition: width 1s ease;
+      background: linear-gradient(90deg, #8b5cf6, #c084fc);
+      box-shadow: 0 0 12px rgba(139, 92, 246, 0.8), inset 0 2px 4px rgba(255,255,255,0.4);
+      border-radius: 10px;
+      transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
     }
+
+    .quest-hero__capsule-fill::after {
+      content: '';
+      position: absolute;
+      top: 0; right: 0; bottom: 0; left: 0;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+      animation: progressShine 2s infinite;
+    }
+
+    @keyframes progressShine {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(100%); }
+    }
+
     .quest-hero__capsule-xp {
-      font-weight: 600;
-      font-size: 0.85rem;
-      color: var(--text-muted);
+      font-weight: 800;
+      font-size: 1.1rem;
+      color: #f8fafc;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+      letter-spacing: 0.5px;
     }
 
     .quests-main {
@@ -97,37 +124,32 @@
 
     .quest-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-      gap: 1rem;
-    }
-
-    @media (max-width: 500px) {
-      .quest-grid {
-        grid-template-columns: 1fr;
-      }
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1.25rem;
     }
 
     .quest-card {
       background: var(--bg-card);
+      border-radius: 16px;
+      padding: 1.5rem;
       border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 1rem 1.25rem;
       display: flex;
+      flex-direction: column;
       gap: 1rem;
-      align-items: center;
       transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
       position: relative;
+      box-shadow: var(--shadow-sm);
     }
 
     .quest-card:hover {
       transform: translateY(-4px);
-      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
+      box-shadow: var(--shadow-md);
+      border-color: var(--primary);
     }
 
     .quest-card.completed {
-      background: #f8fafc;
-      opacity: 0.85;
+      opacity: 0.7;
+      background: var(--bg-elevated);
     }
 
     .quest-card__icon {
@@ -139,48 +161,12 @@
       justify-content: center;
       font-size: 1.5rem;
       flex-shrink: 0;
-      box-shadow: inset 0 1px 3px rgba(255,255,255,0.3);
-    }
-
-    .quest-card {
-      background: var(--bg-card);
-      border-radius: 20px;
-      padding: 1.25rem;
-      border: 1px solid var(--border);
-      display: flex;
-      gap: 1.25rem;
-      transition: all 0.3s var(--ease);
-      position: relative;
-      overflow: hidden;
-    }
-
-    .quest-card:hover {
-      transform: translateY(-4px);
-      box-shadow: var(--shadow-lg);
-      border-color: var(--primary);
-    }
-
-    .quest-card.completed {
-      opacity: 0.8;
-    }
-
-    .quest-card__icon {
-      width: 50px;
-      height: 50px;
-      border-radius: 12px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 1.5rem;
-      flex-shrink: 0;
-      overflow: hidden; /* Added */
     }
 
     .quest-card__body {
       flex: 1;
       display: flex;
       flex-direction: column;
-      min-width: 0;
     }
 
     .quest-card__title {
@@ -243,25 +229,27 @@
     }
 
     .quest-progress-text {
-      font-size: 0.75rem;
+      font-size: 0.8rem;
       font-weight: 600;
       color: var(--text-muted);
     }
 
     .btn-quest-action {
-      padding: 0.4rem 0.9rem;
+      padding: 0.6rem 1rem;
       background: var(--bg-soft);
       border: 1px solid var(--border);
-      border-radius: 50px;
+      border-radius: 10px;
       color: var(--text);
-      font-size: 0.75rem;
+      font-size: 0.85rem;
       font-weight: 700;
       cursor: pointer;
       text-decoration: none;
       transition: all 0.2s ease;
       display: inline-flex;
       align-items: center;
-      gap: 4px;
+      justify-content: center;
+      width: 100%;
+      gap: 6px;
     }
 
     .btn-quest-action:hover {
@@ -454,10 +442,15 @@
         <div id="heroRankName" class="quest-hero__capsule-badge">
           <!-- Rank badge injected by JS -->
         </div>
-        <div class="quest-hero__capsule-progress">
-          <div id="heroXpBar" class="quest-hero__capsule-fill" style="width:0%"></div>
+        <div class="quest-hero__capsule-progress-wrap">
+          <div style="display:flex; justify-content:space-between; align-items:flex-end;">
+            <span style="font-size:0.75rem; color:#94a3b8; font-weight:700; text-transform:uppercase; letter-spacing:1px;">Tiến trình XP</span>
+            <span id="heroXpText" class="quest-hero__capsule-xp">0 XP</span>
+          </div>
+          <div class="quest-hero__capsule-progress">
+            <div id="heroXpBar" class="quest-hero__capsule-fill" style="width:0%"></div>
+          </div>
         </div>
-        <span id="heroXpText" class="quest-hero__capsule-xp">0 XP</span>
       </div>
     </div>
   </section>
@@ -523,45 +516,41 @@
   (function() {
     var token = localStorage.getItem('wander_token');
 
-    // Hàm ghi nhận hoạt động nhiệm vụ vào localStorage
-    function trackQuestActivity(key, value) {
-      try {
-        var data = JSON.parse(localStorage.getItem('wv_quest_activity') || '{}');
-        data[key] = Math.max(data[key] || 0, value || 1);
-        localStorage.setItem('wv_quest_activity', JSON.stringify(data));
-      } catch(e) {}
-    }
-    function getQuestActivity(key) {
-      try { return JSON.parse(localStorage.getItem('wv_quest_activity') || '{}')[key] || 0; } catch(e) { return 0; }
-    }
-    // Expose để các trang khác dùng
+    // Sử dụng WanderUI cho việc tracking nhiệm vụ để đồng bộ chung toàn hệ thống
+    var trackQuestActivity = (window.WanderUI && window.WanderUI.trackQuestActivity) ? window.WanderUI.trackQuestActivity : function(k,v){};
+    var getQuestActivity = (window.WanderUI && window.WanderUI.getQuestActivity) ? window.WanderUI.getQuestActivity : function(k){ return 0; };
     window.trackQuestActivity = trackQuestActivity;
 
-    var QUESTS = [
-      // ☀️ Hàng ngày & Ngắn hạn
-      { id:'daily_login',     cat:'daily',   icon:'☀️', title:'Đăng nhập hàng ngày',          desc:'Mở ứng dụng và đăng nhập tài khoản.',                    xp:2,  max:1, key:'dailyLogin',     link:'index.html' },
-      { id:'daily_chat',      cat:'daily',   icon:'💬', title:'Trò chuyện với Trợ lý AI',     desc:'Gửi ít nhất 1 tin nhắn tới Trợ lý WanderViệt.',         xp:3,  max:1, key:'dailyChat',      link:'index.html#chat' },
-      { id:'daily_search',    cat:'daily',   icon:'🔍', title:'Tìm kiếm điểm đến',            desc:'Sử dụng công cụ tìm kiếm thông minh.',                  xp:2,  max:1, key:'dailySearch',    link:'index.html#search' },
+    function getQuests() {
+      var d = new Date();
+      var dtz = new Date(d.getTime() - (d.getTimezoneOffset() * 60000));
+      var todayStr = dtz.toISOString().split('T')[0];
+      return [
+        // ☀️ Hàng ngày & Ngắn hạn
+        { id:'daily_login_' + todayStr,  cat:'daily',   icon:'☀️', title:'Đăng nhập hàng ngày',          desc:'Mở ứng dụng và đăng nhập tài khoản.',                    xp:2,  max:1, key:'dailyLogin',     link:'index.html' },
+        { id:'daily_chat_' + todayStr,   cat:'daily',   icon:'💬', title:'Trò chuyện với Trợ lý AI',     desc:'Gửi 1 tin nhắn tới Trợ lý WanderViệt hôm nay.',         xp:2,  max:1, key:'dailyChat',      link:'index.html' },
+        { id:'daily_search_' + todayStr, cat:'daily',   icon:'🔍', title:'Tìm kiếm điểm đến',            desc:'Sử dụng công cụ tìm kiếm thông minh hôm nay.',          xp:1,  max:1, key:'dailySearch',    link:'index.html' },
 
-      // 🗺️ Chuyến đi – Hành trình của bạn
-      { id:'trip_create_ai',  cat:'trip',    icon:'🤖', title:'Lập lịch trình bằng AI',       desc:'Dùng AI Planner để tạo chuyến đi thông minh.',           xp:5,  max:1, key:'tripCreateAI',   link:'planner.html' },
-      { id:'trip_pro_planner',cat:'trip',    icon:'🧠', title:'Chuyên gia lên lịch',          desc:'Tích lũy 10 lịch trình du lịch thông minh.',            xp:20, max:10, key:'tripCreateAI',   link:'planner.html' },
-      { id:'trip_save',       cat:'trip',    icon:'💾', title:'Lưu chuyến đi',                desc:'Lưu lại lịch trình trong mục Chuyến đi.',               xp:3,  max:1, key:'tripSave',       link:'planner.html' },
-      { id:'trip_complete',   cat:'trip',    icon:'✅', title:'Hoàn thành chuyến đi',         desc:'Đánh dấu "Đã trải nghiệm" cho 1 chuyến đi.',            xp:10, max:1, key:'tripComplete',   link:'my-trips.html' },
-      { id:'trip_veteran',    cat:'trip',    icon:'🎖️', title:'Kẻ lữ hành đại thụ',          desc:'Hoàn thành 5 chuyến đi thực tế.',                       xp:50, max:5, key:'tripComplete',   link:'my-trips.html' },
+        // 🗺️ Chuyến đi – Hành trình của bạn
+        { id:'trip_create_ai',  cat:'trip',    icon:'🤖', title:'Lập lịch trình bằng AI',       desc:'Dùng AI Planner để tạo chuyến đi thông minh.',           xp:5,  max:1, key:'tripCreateAI',   link:'planner.html' },
+        { id:'trip_pro_planner',cat:'trip',    icon:'🧠', title:'Chuyên gia lên lịch',          desc:'Tích lũy 10 lịch trình du lịch thông minh.',            xp:20, max:10, key:'tripCreateAI',   link:'planner.html' },
+        { id:'trip_save',       cat:'trip',    icon:'💾', title:'Lưu chuyến đi',                desc:'Lưu lại lịch trình trong mục Chuyến đi.',               xp:2,  max:1, key:'tripSave',       link:'planner.html' },
+        { id:'trip_complete',   cat:'trip',    icon:'✅', title:'Hoàn thành chuyến đi',         desc:'Đánh dấu "Đã trải nghiệm" cho 1 chuyến đi.',            xp:10, max:1, key:'tripComplete',   link:'my-trips.html' },
+        { id:'trip_veteran',    cat:'trip',    icon:'🎖️', title:'Kẻ lữ hành đại thụ',          desc:'Hoàn thành 5 chuyến đi thực tế.',                       xp:50, max:5, key:'tripComplete',   link:'my-trips.html' },
 
-      // 🔭 Khám phá – Tìm tòi cái mới
-      { id:'explore_favorite',cat:'explore', icon:'❤️', title:'Lưu địa điểm yêu thích',       desc:'Bấm ❤️ để lưu điểm đến vào danh sách.',                xp:3,  max:1, key:'expFavorite',    link:'index.html#destinations' },
-      { id:'explore_collector',cat:'explore',icon:'📚', title:'Nhà sưu tầm địa danh',          desc:'Lưu trữ 10 địa điểm bạn yêu thích nhất.',               xp:20, max:10, key:'expFavorite',    link:'index.html#destinations' },
-      { id:'explore_contact', cat:'explore', icon:'📞', title:'Liên hệ đặt tour',              desc:'Gửi thông tin liên hệ để được tư vấn.',                 xp:4,  max:1, key:'expContact',     link:'index.html#contact' },
-      { id:'explore_offers',  cat:'explore', icon:'🎁', title:'Săn tìm ưu đãi',               desc:'Khám phá các chương trình khuyến mãi.',                  xp:3,  max:1, key:'expOffers',      link:'index.html#offers' },
+        // 🔭 Khám phá – Tìm tòi cái mới
+        { id:'explore_favorite',cat:'explore', icon:'❤️', title:'Lưu địa điểm yêu thích',       desc:'Bấm ❤️ để lưu điểm đến vào danh sách.',                xp:2,  max:1, key:'expFavorite',    link:'index.html' },
+        { id:'explore_collector',cat:'explore',icon:'📚', title:'Nhà sưu tầm địa danh',          desc:'Lưu trữ 10 địa điểm bạn yêu thích nhất.',               xp:15, max:10, key:'expFavorite',    link:'index.html' },
+        { id:'explore_contact', cat:'explore', icon:'📞', title:'Liên hệ đặt tour',              desc:'Gửi thông tin liên hệ để được tư vấn.',                 xp:5,  max:1, key:'expContact',     link:'index.html' },
+        { id:'explore_offers',  cat:'explore', icon:'🎁', title:'Săn tìm ưu đãi',               desc:'Khám phá các chương trình khuyến mãi.',                  xp:2,  max:1, key:'expOffers',      link:'index.html' },
 
-      // 🌟 Cộng đồng – Kết nối & Chia sẻ
-      { id:'social_avatar',   cat:'social',  icon:'🖼️', title:'Thêm ảnh đại diện',            desc:'Tải lên ảnh hồ sơ của bạn trong phần Cài đặt.',          xp:3,  max:1, key:'socAvatar',      link:'index.html?openSettings=true' },
-      { id:'social_profile',  cat:'social',  icon:'👤', title:'Hoàn thiện hồ sơ',             desc:'Điền tên hiển thị và thông tin cá nhân.',                xp:2,  max:1, key:'socProfile',     link:'index.html?openSettings=true' },
-      { id:'social_board',    cat:'social',  icon:'🏆', title:'Xem bảng xếp hạng',            desc:'Truy cập trang BXH để xem vị trí của bạn.',             xp:2,  max:1, key:'socLeaderboard', link:'leaderboard.html' },
-      { id:'social_influencer',cat:'social', icon:'✍️', title:'Người truyền cảm hứng',        desc:'Viết 5 đánh giá đóng góp cho cộng đồng.',               xp:30, max:5, key:'reviewWrite',     link:'index.html#reviews' }
-    ];
+        // 🌟 Cộng đồng – Kết nối & Chia sẻ
+        { id:'social_avatar',   cat:'social',  icon:'🖼️', title:'Thêm ảnh đại diện',            desc:'Tải lên ảnh hồ sơ của bạn trong phần hồ sơ.',          xp:5,  max:1, key:'socAvatar',      link:'profile.html' },
+        { id:'social_profile',  cat:'social',  icon:'👤', title:'Hoàn thiện hồ sơ',             desc:'Điền tên hiển thị và thông tin cá nhân.',                xp:5,  max:1, key:'socProfile',     link:'profile.html' },
+        { id:'social_board',    cat:'social',  icon:'🏆', title:'Xem bảng xếp hạng',            desc:'Truy cập trang BXH để xem vị trí của bạn.',             xp:2,  max:1, key:'socLeaderboard', link:'leaderboard.html' },
+        { id:'social_influencer',cat:'social', icon:'✍️', title:'Người truyền cảm hứng',        desc:'Viết 5 đánh giá đóng góp cho cộng đồng.',               xp:25, max:5, key:'reviewWrite',     link:'index.html' }
+      ];
+    }
 
     function renderQuests(filter, userStats, dbClaimedQuests) {
       var grid = document.getElementById('questGrid');
@@ -569,7 +558,7 @@
       var rendered = {};
 
       grid.innerHTML = '';
-      QUESTS.forEach(function(q) {
+      getQuests().forEach(function(q) {
         var progress = userStats[q.key] || 0;
         var done = progress >= q.max;
         
@@ -609,40 +598,38 @@
 
         var actionHtml = '';
         if (isClaimed) {
-          actionHtml = '<span style="color:#10b981; font-weight:800; font-size:0.85rem">✓ Đã nhận</span>';
+          actionHtml = '<span style="color:#10b981; font-weight:800; font-size:0.9rem; padding: 0.6rem; text-align: center; width: 100%; display: inline-block;">✓ Đã nhận</span>';
         } else if (done) {
-          actionHtml = '<button class="btn-quest-action btn-claim-main" style="background:#10b981;color:#fff;border-color:#10b981;" data-quest-claim data-quest-id="' + q.id + '" data-quest-xp="' + q.xp + '">🎁 Nhận</button>';
+          actionHtml = '<button class="btn-quest-action btn-claim-main" style="background: linear-gradient(135deg, #10b981, #059669); color:#fff; border: none; box-shadow: 0 4px 12px rgba(16,185,129,0.2);" data-quest-claim data-quest-id="' + q.id + '" data-quest-xp="' + q.xp + '">🎁 Nhận thưởng</button>';
         } else if (q.link === '#') {
           actionHtml = '<button class="btn-quest-action" data-open-profile>🎯 Làm nhiệm vụ</button>';
         } else {
           actionHtml = '<a href="' + q.link + '" class="btn-quest-action">🎯 Làm nhiệm vụ</a>';
         }
 
-        var iconBg = q.cat === 'daily' ? '#fef3c7' : (q.cat === 'trip' ? '#f3e8ff' : '#e0e7ff');
+        var iconBg = q.cat === 'daily' ? 'rgba(251, 191, 36, 0.15)' : (q.cat === 'trip' ? 'rgba(168, 85, 247, 0.15)' : 'rgba(59, 130, 246, 0.15)');
         var displayProgress = Math.min(progress, q.max);
         card.innerHTML =
-          '<div class="quest-card__icon" style="background:' + iconBg + '">' + q.icon + '</div>' +
-          '<div class="quest-card__body">' +
-            '<div style="display:flex; justify-content:space-between; align-items:flex-start;">' +
-              '<div>' +
-                '<h3 class="quest-card__title">' + q.title + '</h3>' +
-                '<p class="quest-card__desc">' + q.desc + '</p>' +
-              '</div>' +
-              '<div class="quest-xp-badge-simple">' +
-                '<span class="xp-val">+' + q.xp + '</span>' +
-                '<span class="xp-lbl">XP</span>' +
-              '</div>' +
+          '<div style="display:flex; justify-content:space-between; align-items:flex-start;">' +
+            '<div class="quest-card__icon" style="background:' + iconBg + '">' + q.icon + '</div>' +
+            '<div class="quest-xp-badge-simple">' +
+              '<span class="xp-val">+' + q.xp + '</span>' +
+              '<span class="xp-lbl">XP</span>' +
             '</div>' +
+          '</div>' +
+          '<div class="quest-card__body">' +
+            '<h3 class="quest-card__title">' + q.title + '</h3>' +
+            '<p class="quest-card__desc">' + q.desc + '</p>' +
             '<div class="quest-card__progress-wrap">' +
+              '<div class="quest-card__progress-info" style="margin-bottom:0.5rem;">' +
+                '<span class="quest-progress-text">Tiến độ: ' + displayProgress + ' / ' + q.max + '</span>' +
+              '</div>' +
               '<div class="quest-card__progress-bar">' +
                 '<div class="quest-card__progress-fill" style="width:' + pct + '%"></div>' +
               '</div>' +
-              '<div class="quest-card__progress-info">' +
-                '<span class="quest-progress-text">' + displayProgress + ' / ' + q.max + '</span>' +
-                '<div class="quest-action-box">' + actionHtml + '</div>' +
-              '</div>' +
             '</div>' +
-          '</div>';
+          '</div>' +
+          '<div style="margin-top:0.5rem;">' + actionHtml + '</div>';
         grid.appendChild(card);
       });
     }
@@ -708,7 +695,7 @@
           var mini = document.getElementById('heroRankMini');
           mini.style.display = 'inline-flex';
           
-          document.getElementById('heroRankName').innerHTML = WanderUI.getRankBadgeHTML(rankRes.rank, rankRes.rankTier);
+          document.getElementById('heroRankName').innerHTML = WanderUI.getRankBadgeHTML(rankRes.rank, rankRes.rankTier) + '<div style="margin-left: 12px; font-weight: 800; color: #fff; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; background: rgba(255,255,255,0.1); padding: 4px 12px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.2); white-space: nowrap;">' + rankRes.rank + ' ' + (rankRes.rankTier || '') + '</div>';
           document.getElementById('heroXpText').textContent = rankRes.points + ' XP';
           
           var thresholds = [0,100,200,300,500,700,1000,1300,1600,2000,2400,2800,3200,3700,4200,5000];
@@ -777,7 +764,7 @@
 
           // 2. Instantly update UI numbers if present in JSON response
           if (json.points !== undefined) {
-            document.getElementById('heroRankName').innerHTML = WanderUI.getRankBadgeHTML(json.rank, json.rankTier);
+            document.getElementById('heroRankName').innerHTML = WanderUI.getRankBadgeHTML(json.rank, json.rankTier) + '<div style="margin-left: 12px; font-weight: 800; color: #fff; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; background: rgba(255,255,255,0.1); padding: 4px 12px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.2); white-space: nowrap;">' + json.rank + ' ' + (json.rankTier || '') + '</div>';
             document.getElementById('heroXpText').textContent = json.points + ' XP';
             var headerRankEl = document.getElementById('header-user-rank');
             if (headerRankEl) headerRankEl.title = json.rank + ' (' + json.points + ' XP)';
