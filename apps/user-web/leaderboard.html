@@ -18,67 +18,39 @@
       color: var(--text);
       font-family: var(--font-sans);
       padding-top: var(--header-h);
+      background-image: 
+        radial-gradient(circle at 5% 5%, rgba(0, 240, 255, 0.02) 0%, transparent 30%),
+        radial-gradient(circle at 95% 95%, rgba(244, 63, 94, 0.02) 0%, transparent 30%);
+      background-attachment: fixed;
     }
 
+    /* --- Compact Hero --- */
     .lb-hero {
       position: relative;
-      padding: 1.5rem 0 2rem;
-      background: var(--bg);
-      overflow: hidden;
+      padding: 2.5rem 0 2rem;
       text-align: center;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .lb-hero__orb {
-      position: absolute;
-      width: 400px;
-      height: 400px;
-      background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
-      filter: blur(80px);
-      z-index: 0;
-      opacity: 0.2;
-      pointer-events: none;
-    }
-
-    .lb-hero__orb--1 {
-      top: -150px;
-      right: -50px;
-    }
-
-    .lb-hero__content {
-      position: relative;
-      z-index: 1;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
     }
 
     .lb-hero h1 {
       font-family: var(--font-display);
-      font-size: clamp(1.6rem, 3.5vw, 2rem);
-      font-weight: 850;
-      margin-bottom: 0.35rem;
-      letter-spacing: -0.03em;
+      font-size: 2.25rem;
+      font-weight: 900;
+      letter-spacing: -0.05em;
+      margin-bottom: 0.5rem;
+      color: #fff;
     }
 
     .lb-hero p {
-      font-size: 0.95rem;
+      font-size: 1rem;
       color: var(--text-muted);
       max-width: 500px;
       margin: 0 auto;
-      line-height: 1.5;
+      opacity: 0.8;
     }
 
-    .lb-main {
-      padding: 2rem 0 4rem;
-    }
-
-    .lb-card {
-      background: var(--bg-card);
-      backdrop-filter: var(--surface-blur);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 1.25rem 1.5rem 2rem;
-      box-shadow: var(--shadow-xl);
-    }
-
+    /* --- Layout --- */
+    .lb-main { padding: 2rem 0 5rem; }
     .lb-layout {
       display: grid;
       grid-template-columns: 1fr 340px;
@@ -87,717 +59,251 @@
     }
 
     @media (max-width: 1024px) {
-      .lb-layout {
-        grid-template-columns: 1fr;
-      }
+      .lb-layout { grid-template-columns: 1fr; }
     }
 
-    .lb-side-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 1.25rem;
-      margin-bottom: 1.25rem;
-      box-shadow: var(--shadow-lg);
-    }
-
-    .side-card-title {
-      font-size: 1.15rem;
-      font-weight: 800;
-      margin-bottom: 1.25rem;
-      padding-bottom: 0.75rem;
-      border-bottom: 1px solid var(--border);
-      color: var(--text);
-    }
-
-    .lb-card-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 1.5rem;
-      flex-wrap: wrap;
-      gap: 0.75rem;
-      border-bottom: 1px solid var(--border);
-      padding-bottom: 1rem;
-    }
-
-    .lb-tabs {
-      display: flex;
-      gap: 0.25rem;
-      background: var(--bg-elevated);
-      padding: 0.35rem;
-      border-radius: 100px;
-      border: 1px solid var(--border);
-    }
-
-    .lb-tab {
-      padding: 0.5rem 1rem;
-      border-radius: 100px;
-      border: none;
-      background: transparent;
-      color: var(--text-muted);
-      font-weight: 700;
-      font-size: 0.85rem;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-
-    .lb-tab.active {
-      background: var(--primary);
-      color: #fff;
-      box-shadow: 0 2px 10px rgba(59, 130, 246, 0.4);
-    }
-
-    .lb-search input {
-      background: var(--bg-elevated);
-      border: 1px solid var(--border);
-      color: var(--text);
-      padding: 0.6rem 1.25rem;
-      border-radius: 100px;
-      outline: none;
-      font-size: 0.9rem;
-      width: 200px;
-      transition: all 0.3s;
-    }
-
-    .lb-search input:focus {
-      border-color: var(--primary);
-      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
-      width: 240px;
-    }
-
-    .my-stats-content {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 0.75rem;
-      padding: 1.5rem 1rem;
-      background: var(--bg-elevated);
-      border-radius: 16px;
-      border: 1px solid var(--border);
-      text-align: center;
-    }
-
-    .sidebar-rank-item {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      padding: 0.75rem 1rem;
-      background: var(--bg-elevated);
-      border-radius: 12px;
-      border: 1px solid var(--border);
-      margin-bottom: 0.5rem;
-      transition: all 0.2s;
-    }
-
-    .sidebar-rank-item:hover {
-      transform: translateX(5px);
-      border-color: var(--primary);
-    }
-
-    .sidebar-rank-item .rank-sprite {
-      transform: scale(0.5);
-      margin: -20px -20px -20px -20px;
-    }
-
-    .sidebar-rank-item .rank-text {
-      display: none;
-    }
-
-    .sidebar-rank-info {
-      flex: 1;
-      text-align: left;
-    }
-
-    .sidebar-rank-name {
-      font-weight: 700;
-      font-size: 0.95rem;
-      color: var(--text);
-    }
-
-    .sidebar-rank-xp {
-      font-size: 0.8rem;
-      color: var(--text-muted);
-      font-weight: 600;
-      margin-top: 2px;
-    }
-
-    .lb-list {
-      display: flex;
-      flex-direction: column;
-      gap: 0.75rem;
-      margin-top: 0.5rem;
-    }
-
-    .lb-item {
-      display: flex;
-      align-items: center;
-      gap: 1.25rem;
-      padding: 1rem 1.5rem;
-      background: var(--bg-elevated);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      transition: all 0.3s var(--ease);
-    }
-
-    .lb-item:hover {
-      transform: scale(1.01);
-      border-color: var(--primary);
-      background: var(--bg-card);
-      box-shadow: var(--shadow-md);
-    }
-
-    .lb-rank-badge {
-      width: 40px;
-      height: 40px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 850;
-      font-size: 1.1rem;
-      background: var(--bg);
-      border-radius: 10px;
-      flex-shrink: 0;
-      border: 1px solid var(--border);
-      color: var(--text-muted);
-    }
-
-    .rank-1 .lb-rank-badge {
-      background: var(--accent);
-      color: var(--bg);
-      border: none;
-      font-size: 1.25rem;
-    }
-
-    .rank-2 .lb-rank-badge {
-      background: #94a3b8;
-      color: var(--bg);
-      border: none;
-    }
-
-    .rank-3 .lb-rank-badge {
-      background: #b45309;
-      color: var(--bg);
-      border: none;
-    }
-
-    .lb-avatar {
-      width: 48px;
-      height: 48px;
-      border-radius: 12px;
+    /* --- Modular Sectioning --- */
+    .lb-section-box {
+      background: rgba(15, 23, 42, 0.3);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 24px;
       overflow: hidden;
-      border: 1.5px solid var(--border);
-      background: var(--bg-elevated);
-      flex-shrink: 0;
+      margin-bottom: 2rem;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
     }
 
-    .lb-avatar img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-
-    .lb-info {
-      flex: 1;
-    }
-
-    .lb-name {
-      display: block;
-      font-weight: 700;
-      font-size: 1rem;
-      margin-bottom: 0.4rem;
-      color: var(--text);
-    }
-
-    .lb-tier {
-      display: flex;
-      align-items: center;
-      gap: 0;
-    }
-
-    .lb-tier .rank-sprite {
-      transform: scale(0.55);
-      margin-top: -18px;
-      margin-bottom: -18px;
-      margin-left: -20px;
-      margin-right: -15px;
-      /* Pull text closer to the scaled sprite */
-    }
-
-    .lb-xp {
-      text-align: right;
-    }
-
-    .lb-xp-val {
-      display: block;
-      font-weight: 850;
-      font-size: 1.3rem;
-      color: var(--primary);
-      line-height: 1;
-    }
-
-    .lb-xp-label {
-      font-size: 0.7rem;
-      font-weight: 800;
-      text-transform: uppercase;
-      color: var(--text-muted);
-      letter-spacing: 0.05em;
-    }
-
-    .loading-wrap {
-      text-align: center;
-      padding: 4rem 0;
-      color: var(--text-muted);
-    }
-
-    .loading-spinner {
-      width: 32px;
-      height: 32px;
-      border: 3px solid var(--border);
-      border-top-color: var(--primary);
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-      margin: 0 auto 1.2rem;
-    }
-
+    /* --- Podium Compact --- */
     .lb-podium {
       display: flex;
       justify-content: center;
       align-items: flex-end;
-      gap: 1rem;
-      margin-bottom: 3rem;
-      padding-top: 2rem;
+      gap: 1.5rem;
+      padding: 4rem 1rem 0;
+      background: linear-gradient(to bottom, rgba(255,255,255,0.03), transparent);
+      min-height: 320px;
     }
 
     .podium-item {
       display: flex;
       flex-direction: column;
       align-items: center;
+      width: 140px;
       position: relative;
-      width: 140px;
-      animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards;
-    }
-
-    .podium-item.rank-1 {
-      z-index: 3;
-      animation-delay: 0.2s;
-      width: 140px;
-    }
-
-    .podium-item.rank-2 {
-      z-index: 2;
-      animation-delay: 0.4s;
-    }
-
-    .podium-item.rank-3 {
-      z-index: 1;
-      animation-delay: 0.6s;
-    }
-
-    @keyframes slideUp {
-      from {
-        opacity: 0;
-        transform: translateY(30px);
-      }
-
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
     }
 
     .podium-avatar-wrap {
       position: relative;
-      margin-bottom: -15px;
       z-index: 2;
+      margin-bottom: -15px;
     }
 
     .podium-avatar {
-      width: 70px;
-      height: 70px;
-      border-radius: 16px;
-      border: 3px solid var(--bg-card);
-      overflow: hidden;
+      width: 64px;
+      height: 64px;
+      border-radius: 20px;
+      border: 3px solid rgba(255,255,255,0.1);
+      box-shadow: 0 15px 30px rgba(0,0,0,0.4);
       background: var(--bg-elevated);
-      box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
-      position: relative;
-      transition: all 0.3s var(--ease);
+      overflow: hidden;
+      transition: all 0.3s;
     }
 
-    .podium-item:hover .podium-avatar {
-      transform: translateY(-5px) scale(1.05);
-      box-shadow: 0 12px 35px rgba(0, 0, 0, 0.5);
-    }
-
-    .rank-1 .podium-avatar {
-      width: 96px;
-      height: 96px;
-      border-radius: 24px;
-      border-color: #fbbf24;
-      box-shadow: 0 0 30px rgba(251, 191, 36, 0.4), 0 10px 40px rgba(0,0,0,0.5);
-    }
-
-    .rank-2 .podium-avatar {
-      border-color: #cbd5e1;
-    }
-
-    .rank-3 .podium-avatar {
-      border-color: #b45309;
-    }
-
-    .podium-avatar img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
+    .rank-1 .podium-avatar { width: 100px; height: 100px; border-color: #fbbf24; border-radius: 32px; }
+    .rank-2 .podium-avatar { width: 85px; height: 85px; border-color: #94a3b8; border-radius: 28px; }
+    .rank-3 .podium-avatar { width: 75px; height: 75px; border-color: #b45309; border-radius: 24px; }
 
     .podium-crown {
       position: absolute;
-      top: -20px;
+      top: -35px;
       left: 50%;
       transform: translateX(-50%);
-      font-size: 1.75rem;
-      filter: drop-shadow(0 2px 6px rgba(251, 191, 36, 0.6));
+      font-size: 2.5rem;
+      z-index: 3;
+      filter: drop-shadow(0 4px 10px rgba(251, 191, 36, 0.6));
     }
 
     .podium-base {
       width: 100%;
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0.01) 100%);
-      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.04);
+      border-radius: 20px 20px 0 0;
+      padding: 2.5rem 0.75rem 1.5rem;
+      text-align: center;
+      border: 1px solid rgba(255,255,255,0.06);
       border-bottom: none;
-      border-radius: 12px 12px 0 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 1.5rem 0.5rem 0.75rem;
-      backdrop-filter: blur(10px);
     }
 
-    .rank-1 .podium-base {
-      height: 160px;
-      background: linear-gradient(180deg, rgba(251, 191, 36, 0.12) 0%, rgba(251, 191, 36, 0.01) 100%);
-      border-color: rgba(251, 191, 36, 0.25);
-    }
-
-    .rank-2 .podium-base {
-      height: 120px;
-      background: linear-gradient(180deg, rgba(148, 163, 184, 0.08) 0%, rgba(148, 163, 184, 0.01) 100%);
-      border-color: rgba(148, 163, 184, 0.2);
-    }
-
-    .rank-3 .podium-base {
-      height: 95px;
-      background: linear-gradient(180deg, rgba(180, 83, 9, 0.08) 0%, rgba(180, 83, 9, 0.01) 100%);
-      border-color: rgba(180, 83, 9, 0.2);
-    }
-
-    .podium-badge-wrap {
-      margin-bottom: 0.25rem;
-      display: flex;
-      justify-content: center;
-      width: 100%;
-    }
-
-    /* Target the container returned by WanderUI.getRankBadgeHTML inside the podium */
-    .podium-badge-wrap .rank-badge-container {
-      flex-direction: column;
-      gap: 0;
-      transform: scale(0.8);
-      transform-origin: center top;
-      margin-bottom: -10px;
-    }
-
-    .podium-badge-wrap .rank-text {
-      font-size: 0.7rem;
-      margin-top: -15px;
-      opacity: 0.8;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
+    .rank-1 .podium-base { height: 180px; background: linear-gradient(to bottom, rgba(251, 191, 36, 0.12), transparent); border-color: rgba(251, 191, 36, 0.25); }
+    .rank-2 .podium-base { height: 130px; }
+    .rank-3 .podium-base { height: 100px; }
 
     .podium-name-top {
-      font-weight: 750;
-      font-size: 0.95rem;
-      color: var(--text);
-      text-align: center;
+      font-size: 1rem;
+      font-weight: 850;
       margin-bottom: 0.75rem;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      color: #fff;
       max-width: 130px;
-      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
     }
 
-    .podium-xp {
-      font-size: 1.15rem;
-      font-weight: 850;
-      color: var(--text);
-      margin-top: 0.25rem;
-      position: relative;
-      z-index: 2;
-    }
+    .podium-xp { font-size: 1.25rem; font-weight: 900; color: var(--primary); }
+    .rank-1 .podium-xp { color: #fbbf24; font-size: 1.5rem; }
 
-    .rank-1 .podium-xp {
-      color: #fbbf24;
-      font-size: 1.35rem;
-    }
-
-    .rank-2 .podium-xp {
-      color: #cbd5e1;
-    }
-
-    .rank-3 .podium-xp {
-      color: #d97706;
-    }
-
-    .podium-xp-label {
-      font-size: 0.65rem;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      font-weight: 700;
-      position: relative;
-      z-index: 2;
-    }
-
-    /* Update List styles */
-    .lb-list {
-      display: flex;
-      flex-direction: column;
-      gap: 0.75rem;
-      margin-top: 0.5rem;
-    }
-
-    .lb-item {
-      display: flex;
-      align-items: center;
-      gap: 1.25rem;
-      padding: 0.75rem 1.25rem;
-      background: var(--bg-elevated);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      transition: all 0.3s var(--ease);
-      animation: slideIn 0.4s ease backwards;
-    }
-
-    @keyframes slideIn {
-      from {
-        opacity: 0;
-        transform: translateX(-15px);
-      }
-
-      to {
-        opacity: 1;
-        transform: translateX(0);
-      }
-    }
-
-    /* Rank Tiers Section Styles */
-    .ranks-grid-section {
-      margin-top: 5rem;
-      padding-bottom: 5rem;
-    }
-
-    .ranks-grid-title {
-      text-align: center;
-      margin-bottom: 2.5rem;
-    }
-
-    .ranks-grid-title h2 {
-      font-family: var(--font-display);
-      font-size: 1.8rem;
-      font-weight: 800;
-      margin-bottom: 0.5rem;
-    }
-
-    .ranks-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 1.5rem;
-    }
-
-    .rank-tier-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 20px;
-      padding: 1.5rem;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      transition: all 0.3s var(--ease);
-      position: relative;
-    }
-
-    .rank-tier-card:hover {
-      transform: translateY(-5px);
-      border-color: var(--primary);
-      box-shadow: var(--shadow-lg);
-    }
-
-    .rank-tier-icon {
-      margin-bottom: 1rem;
-    }
-
-    .rank-tier-name {
-      font-family: var(--font-display);
-      font-size: 1.25rem;
-      font-weight: 700;
-      margin-bottom: 0.25rem;
-    }
-
-    .rank-tier-desc {
-      font-size: 0.85rem;
-      color: var(--text-muted);
-      text-align: center;
-      margin-bottom: 1.25rem;
-      line-height: 1.4;
-    }
-
-    .rank-levels {
-      width: 100%;
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-    }
-
-    .rank-level-row {
+    /* --- List Items High Density --- */
+    .lb-card { padding: 1.5rem; }
+    
+    .lb-card-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 0.5rem 0.75rem;
-      background: var(--bg-elevated);
-      border-radius: 10px;
-      font-size: 0.8rem;
-      font-weight: 600;
+      margin-bottom: 2rem;
+      gap: 1.5rem;
+      flex-wrap: wrap;
     }
 
-    .rank-level-tag {
-      color: var(--primary);
+    .lb-tabs {
+      background: rgba(255,255,255,0.04);
+      padding: 0.4rem;
+      border-radius: 16px;
+      display: flex;
+      gap: 0.4rem;
     }
 
-    .rank-xp-tag {
+    .lb-tab {
+      padding: 0.6rem 1.5rem;
+      font-size: 0.9rem;
+      border-radius: 12px;
+      border: none;
+      background: transparent;
       color: var(--text-muted);
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.3s;
     }
 
-    /* Rank Specific Accents - Premium Style for ALL */
+    .lb-tab.active { background: #fff; color: #000; box-shadow: 0 4px 12px rgba(255,255,255,0.1); }
+
+    .lb-search input {
+      padding: 0.75rem 1rem 0.75rem 2.75rem;
+      font-size: 0.95rem;
+      width: 240px;
+      border-radius: 16px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: #fff;
+      outline: none;
+      transition: all 0.3s;
+    }
+    .lb-search input:focus { border-color: var(--primary); background: rgba(255,255,255,0.06); width: 280px; }
+    .lb-search { position: relative; }
+    .lb-search::before { content: '🔍'; position: absolute; left: 1.1rem; top: 50%; transform: translateY(-50%); font-size: 1rem; opacity: 0.5; }
+
+    .lb-list { display: flex; flex-direction: column; gap: 0.75rem; }
+    
+    .lb-item {
+      display: flex !important;
+      align-items: center !important;
+      justify-content: flex-start !important;
+      padding: 0.85rem 1.5rem;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.05);
+      border-radius: 20px;
+      gap: 1.5rem;
+      transition: all 0.4s var(--ease);
+    }
+
+    .lb-item:hover { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.1); transform: translateX(5px); }
+
+    .lb-rank-badge {
+      width: 40px;
+      height: 40px;
+      background: rgba(255,255,255,0.05);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 900;
+      font-size: 1.1rem;
+      border-radius: 14px;
+      color: #fff;
+      flex-shrink: 0;
+    }
+
+    .lb-avatar { width: 52px; height: 52px; border-radius: 14px; overflow: hidden; border: 1px solid rgba(255,255,255,0.1); flex-shrink: 0; background: var(--bg-elevated); }
+    .lb-avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+    .lb-info { flex: 1; display: flex; flex-direction: column; gap: 0.25rem; min-width: 0; }
+    .lb-name { font-size: 1.1rem; font-weight: 800; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    
+    .lb-xp { text-align: right; flex-shrink: 0; }
+    .lb-xp-val { font-size: 1.35rem; font-weight: 900; color: #fff; display: block; line-height: 1; margin-bottom: 2px; }
+    .lb-xp-label { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; font-weight: 800; letter-spacing: 0.05em; }
+
+    /* --- Sidebar Optimized --- */
+    .lb-side-card {
+      background: rgba(15, 23, 42, 0.3);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      padding: 1.75rem;
+      border-radius: 28px;
+      margin-bottom: 1.5rem;
+    }
+
+    .side-card-title {
+      font-size: 1.2rem;
+      margin-bottom: 1.5rem;
+      font-weight: 900;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .side-card-title::before { content: '✨'; font-size: 1rem; }
+
+    .my-stats-content {
+      background: rgba(255,255,255,0.03);
+      padding: 2.5rem 1rem;
+      border-radius: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      border: 1px solid rgba(255,255,255,0.05);
+    }
+
+    .sidebar-rank-item {
+      display: flex;
+      align-items: center;
+      padding: 0.85rem 1.25rem;
+      background: rgba(255,255,255,0.03);
+      border-radius: 18px;
+      gap: 1.25rem;
+      margin-bottom: 0.85rem;
+      border: 1px solid transparent;
+      transition: all 0.3s;
+    }
+    .sidebar-rank-item:hover { border-color: rgba(255,255,255,0.1); background: rgba(255,255,255,0.05); transform: translateX(5px); }
+
+    .sidebar-rank-name { font-size: 1rem; font-weight: 750; color: #fff; }
+    .sidebar-rank-xp { font-size: 0.85rem; color: var(--text-muted); font-weight: 700; }
+
+    /* Rank Specific Accents */
     :root {
       --lb-bronze-text: #fcd34d;
-      --lb-bronze-xp: #fbbf24;
       --lb-silver-text: #e2e8f0;
-      --lb-silver-xp: #cbd5e1;
-      --lb-gold-text: #fef3c7;
-      --lb-gold-xp: #fde68a;
-      --lb-plat-text: #ccfbf1;
-      --lb-plat-xp: #99f6e4;
-      --lb-diam-text: #dbeafe;
-      --lb-diam-xp: #bfdbfe;
-      --lb-leg-text: #f3e8ff;
-      --lb-leg-xp: #d8b4fe;
+      --lb-gold-text: #fbbf24;
+      --lb-plat-text: #2dd4bf;
+      --lb-diam-text: #3b82f6;
+      --lb-leg-text: #a855f7;
     }
 
-    [data-theme="light"] {
-      --lb-bronze-text: #92400e;
-      --lb-bronze-xp: #b45309;
-      --lb-silver-text: #334155;
-      --lb-silver-xp: #475569;
-      --lb-gold-text: #a16207;
-      --lb-gold-xp: #ca8a04;
-      --lb-plat-text: #0f766e;
-      --lb-plat-xp: #0d9488;
-      --lb-diam-text: #1d4ed8;
-      --lb-diam-xp: #2563eb;
-      --lb-leg-text: #6b21a8;
-      --lb-leg-xp: #7e22ce;
-    }
-
-    .rank-tier-card {
-      border: none !important;
-      outline: none !important;
-      transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    }
-
-    .rank-tier-card:hover {
-      border: none !important;
-      transform: translateY(-8px) scale(1.02);
-    }
-
-    /* Bronze */
-    .tier-bronze {
-      background: linear-gradient(180deg, rgba(180, 83, 9, 0.08) 0%, var(--bg-card) 100%);
-      box-shadow: 0 4px 24px rgba(180, 83, 9, 0.12);
-    }
-
-    .tier-bronze:hover {
-      box-shadow: 0 12px 48px rgba(180, 83, 9, 0.25) !important;
-    }
-
-    .tier-bronze .rank-tier-icon {
-      filter: drop-shadow(0 0 20px rgba(180, 83, 9, 0.5));
-    }
-
-    .tier-bronze .rank-level-row {
-      background: rgba(180, 83, 9, 0.05);
-      border: 1px solid rgba(180, 83, 9, 0.1);
-      color: var(--lb-bronze-text);
-    }
-
-    .tier-bronze .rank-xp-tag {
-      color: var(--lb-bronze-xp);
-    }
-
-    /* Silver */
-    .tier-silver {
-      background: linear-gradient(180deg, rgba(148, 163, 184, 0.08) 0%, var(--bg-card) 100%);
-      box-shadow: 0 4px 24px rgba(148, 163, 184, 0.12);
-    }
-
-    .tier-silver:hover {
-      box-shadow: 0 12px 48px rgba(148, 163, 184, 0.25) !important;
-    }
-
-    .tier-silver .rank-tier-icon {
-      filter: drop-shadow(0 0 20px rgba(148, 163, 184, 0.5));
-    }
-
-    .tier-silver .rank-level-row {
-      background: rgba(148, 163, 184, 0.05);
-      border: 1px solid rgba(148, 163, 184, 0.1);
-      color: var(--lb-silver-text);
-    }
-
-    .tier-silver .rank-xp-tag {
-      color: var(--lb-silver-xp);
-    }
-
-    /* Gold */
-    .tier-gold {
-      background: linear-gradient(180deg, rgba(251, 191, 36, 0.08) 0%, var(--bg-card) 100%);
-      box-shadow: 0 4px 24px rgba(251, 191, 36, 0.12);
-    }
-
-    .tier-gold:hover {
-      box-shadow: 0 12px 48px rgba(251, 191, 36, 0.25) !important;
-    }
-
-    .tier-gold .rank-tier-icon {
-      filter: drop-shadow(0 0 20px rgba(251, 191, 36, 0.5));
-    }
-
-    .tier-gold .rank-level-row {
-      background: rgba(251, 191, 36, 0.05);
-      border: 1px solid rgba(251, 191, 36, 0.1);
-      color: var(--lb-gold-text);
-    }
-
-    .tier-gold .rank-xp-tag {
-      color: var(--lb-gold-xp);
-    }
-
-    /* Platinum */
-    .tier-platinum {
-      background: linear-gradient(180deg, rgba(45, 212, 191, 0.08) 0%, var(--bg-card) 100%);
-      box-shadow: 0 4px 24px rgba(45, 212, 191, 0.12);
-    }
+    .tier-bronze { background: linear-gradient(135deg, rgba(146, 64, 14, 0.1), transparent); }
+    .tier-silver { background: linear-gradient(135deg, rgba(71, 85, 105, 0.1), transparent); }
+    .tier-gold { background: linear-gradient(135deg, rgba(161, 98, 7, 0.15), transparent); }
+    .tier-platinum { background: linear-gradient(135deg, rgba(15, 118, 110, 0.15), transparent); }
+    .tier-diamond { background: linear-gradient(135deg, rgba(29, 78, 216, 0.15), transparent); }
+    .tier-legendary { background: linear-gradient(135deg, rgba(107, 33, 168, 0.2), transparent); }
 
     .tier-platinum:hover {
       box-shadow: 0 12px 48px rgba(45, 212, 191, 0.25) !important;
@@ -871,11 +377,9 @@
   <header class="site-header" id="header-container"></header>
 
   <section class="lb-hero">
-    <div class="lb-hero__orb lb-hero__orb--1"></div>
     <div class="container lb-hero__content">
       <h1>Bảng Xếp Hạng</h1>
-      <p>Vinh danh những nhà thám hiểm tài ba nhất của WanderViệt. Hoàn thành nhiệm vụ, khám phá điểm đến và thăng hạng
-        ngay hôm nay!</p>
+      <p>Nơi vinh danh những nhà thám hiểm kiệt xuất của WanderViệt.</p>
     </div>
   </section>
 
@@ -883,24 +387,31 @@
     <div class="container lb-layout">
       <!-- Left Column: Main Leaderboard -->
       <div class="lb-left">
-        <div class="lb-card">
-          <!-- Card Header with Tabs and Search -->
-          <div class="lb-card-header">
-            <div class="lb-tabs">
-              <button class="lb-tab active">Mùa giải này</button>
-              <button class="lb-tab">Mọi thời đại</button>
-              <button class="lb-tab">Bạn bè</button>
-            </div>
-            <div class="lb-search">
-              <input type="text" id="lbSearchInput" placeholder="🔍 Tìm nhà thám hiểm..." />
-            </div>
-          </div>
-
+        <!-- Podium Section -->
+        <div class="lb-section-box">
           <div id="lbPodium" class="lb-podium" style="display: none;"></div>
-          <div id="leaderboardList" class="lb-list">
-            <div class="loading-wrap">
-              <div class="loading-spinner"></div>
-              <p>Đang tải bảng xếp hạng nhà thám hiểm...</p>
+        </div>
+        
+        <!-- List Section -->
+        <div class="lb-section-box">
+          <div class="lb-card">
+            <!-- Card Header -->
+            <div class="lb-card-header">
+              <div class="lb-tabs">
+                <button class="lb-tab active">Mùa giải</button>
+                <button class="lb-tab">Tất cả</button>
+                <button class="lb-tab">Bạn bè</button>
+              </div>
+              <div class="lb-search">
+                <input type="text" id="lbSearchInput" placeholder="Tìm tên..." />
+              </div>
+            </div>
+
+            <div id="leaderboardList" class="lb-list">
+              <div class="loading-wrap">
+                <div class="loading-spinner"></div>
+                <p>Đang tải dữ liệu...</p>
+              </div>
             </div>
           </div>
         </div>
@@ -927,8 +438,6 @@
     </div>
   </main>
 
-  <!-- SVG filter for background removal is now injected via SharedUI.js?v=1777307000000 for consistency across all pages -->
-
   <script src="SharedUI.js?v=1777335000000"></script>
   <script>
     document.addEventListener('DOMContentLoaded', function () {
@@ -938,20 +447,22 @@
 
       // --- Render Rank Tiers Grid ---
       const rankTiersData = [
-        { name: 'Đồng', class: 'tier-bronze', desc: 'Bước chân đầu tiên của những nhà thám hiểm trẻ tuổi.', levels: [{ t: 'I', x: 0 }, { t: 'II', x: 100 }, { t: 'III', x: 200 }] },
-        { name: 'Bạc', class: 'tier-silver', desc: 'Dành cho những người đã có kinh nghiệm xê dịch.', levels: [{ t: 'I', x: 300 }, { t: 'II', x: 500 }, { t: 'III', x: 700 }] },
-        { name: 'Vàng', class: 'tier-gold', desc: 'Những nhà du hành chuyên nghiệp với niềm đam mê lớn.', levels: [{ t: 'I', x: 1000 }, { t: 'II', x: 1300 }, { t: 'III', x: 1600 }] },
-        { name: 'Bạch Kim', class: 'tier-platinum', desc: 'Sự tinh tế và đẳng cấp trong từng chuyến đi.', levels: [{ t: 'I', x: 2000 }, { t: 'II', x: 2400 }, { t: 'III', x: 2800 }] },
-        { name: 'Kim Cương', class: 'tier-diamond', desc: 'Biểu tượng của sự bền bỉ và am hiểu sâu sắc về du lịch.', levels: [{ t: 'I', x: 3200 }, { t: 'II', x: 3700 }, { t: 'III', x: 4200 }] },
-        { name: 'Huyền Thoại', class: 'tier-legendary', desc: 'Đỉnh cao vinh quang. Thế giới nằm trong lòng bàn tay bạn.', levels: [{ t: 'Vô Song', x: 5000 }] }
+        { name: 'Đồng', class: 'tier-bronze', levels: [{ t: 'I', x: 0 }] },
+        { name: 'Bạc', class: 'tier-silver', levels: [{ t: 'I', x: 300 }] },
+        { name: 'Vàng', class: 'tier-gold', levels: [{ t: 'I', x: 1000 }] },
+        { name: 'Bạch Kim', class: 'tier-platinum', levels: [{ t: 'I', x: 2000 }] },
+        { name: 'Kim Cương', class: 'tier-diamond', levels: [{ t: 'I', x: 3200 }] },
+        { name: 'Huyền Thoại', class: 'tier-legendary', levels: [{ t: 'Vô Song', x: 5000 }] }
       ];
 
       if (ranksSidebar) {
         ranksSidebar.innerHTML = rankTiersData.map(tier => `
-          <div class="sidebar-rank-item">
-            ${WanderUI.getRankBadgeHTML(tier.name, tier.name === 'Huyền Thoại' ? '' : 'I')}
+          <div class="sidebar-rank-item ${tier.class}">
+            <div style="display:flex; align-items:center; transform: scale(0.7); margin: -10px -15px;">
+              ${WanderUI.getRankBadgeHTML(tier.name, tier.name === 'Huyền Thoại' ? '' : 'I')}
+            </div>
             <div class="sidebar-rank-info">
-              <div class="sidebar-rank-name">Hạng ${tier.name}</div>
+              <div class="sidebar-rank-name">${tier.name}</div>
               <div class="sidebar-rank-xp">Từ ${tier.levels[0].x.toLocaleString()} XP</div>
             </div>
           </div>
@@ -962,9 +473,9 @@
         if (!myStatsContent) return;
         myStatsContent.innerHTML = `
           <div style="padding: 1rem 0; color: var(--text-muted);">
-            <div style="font-size: 2rem; margin-bottom: 0.5rem;">👤</div>
-            <p style="margin-bottom: 1rem;">Đăng nhập để xem thống kê của bạn</p>
-            <button class="btn btn--primary btn--sm" data-auth-open>Tham gia ngay</button>
+            <div style="font-size: 2.5rem; margin-bottom: 1rem; filter: grayscale(1); opacity: 0.5;">👤</div>
+            <p style="margin-bottom: 1.5rem; font-size: 0.95rem;">Đăng nhập để xem vị trí của bạn</p>
+            <button class="btn btn--primary" style="width: 100%" data-auth-open>Tham gia ngay</button>
           </div>
         `;
       };
@@ -973,42 +484,28 @@
       const myStatsContent = document.getElementById('myStatsContent');
       const token = localStorage.getItem('wander_token');
       if (token && myStatsContent) {
-        try {
-          // Attempt to get user from token or API. For now, decode token.
-          const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-          const padding = '='.repeat((4 - base64.length % 4) % 4);
-          const payload = JSON.parse(decodeURIComponent(escape(atob(base64 + padding))));
-          const u = payload.user || payload.account || payload;
-
-          fetch('/api/auth/user/me', { headers: { 'x-auth-token': token } })
-            .then(res => res.json())
-            .then(data => {
-              if (data.success && data.user) {
-                const user = data.user;
-                myStatsContent.innerHTML = `
-                  <div style="width: 64px; height: 64px; border-radius: 16px; overflow: hidden; border: 2px solid var(--primary); margin-bottom: 0.5rem; background: var(--bg-elevated);">
-                    ${user.avatar ? `<img src="${user.avatar}" style="width:100%;height:100%;object-fit:cover;">` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:2rem;">👤</div>`}
+        fetch('/api/auth/user/me', { headers: { 'x-auth-token': token } })
+          .then(res => res.json())
+          .then(data => {
+            if (data.success && data.user) {
+              const user = data.user;
+              myStatsContent.innerHTML = `
+                <div style="width: 80px; height: 80px; border-radius: 24px; overflow: hidden; border: 3px solid var(--primary); margin-bottom: 1rem; background: var(--bg-elevated); box-shadow: 0 10px 25px rgba(0,240,255,0.2);">
+                  ${user.avatar ? `<img src="${user.avatar}" style="width:100%;height:100%;object-fit:cover;">` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:2.5rem;">👤</div>`}
+                </div>
+                <h4 style="font-size: 1.25rem; font-weight: 850; color: #fff; margin-bottom: 0.25rem;">${user.displayName || user.name || 'Người dùng'}</h4>
+                <div style="display:flex; align-items:center; gap:0.5rem; justify-content:center; margin-bottom: 1rem; opacity: 0.8;">
+                  <div style="transform: scale(0.7); margin: -15px -20px;">
+                    ${WanderUI.getRankBadgeHTML(user.rank || 'Đồng', user.rankTier || 'I')}
                   </div>
-                  <h4 style="font-size: 1.1rem; font-weight: 700; color: var(--text); margin-bottom: 0.25rem;">${user.displayName || user.name || 'Người dùng'}</h4>
-                  <div style="display:flex; align-items:center; gap:0.5rem; justify-content:center; margin-bottom: 0.5rem;">
-                    <div style="transform: scale(0.6); margin: -20px -25px -20px -25px;">
-                      ${WanderUI.getRankBadgeHTML(user.rank || 'Đồng', user.rankTier || 'I')}
-                    </div>
-                  </div>
-                  <div style="font-size: 1.5rem; font-weight: 850; color: var(--primary);">${(user.points || 0).toLocaleString()} <span style="font-size:0.8rem; color:var(--text-muted);">XP</span></div>
-                `;
-              } else {
-                // Token invalid or expired
-                localStorage.removeItem('wander_token');
-                showLoginPrompt();
-              }
-            }).catch(e => {
-              console.error('Stats fetch error:', e);
-              myStatsContent.innerHTML = '<p style="color:var(--text-muted); font-size:0.9rem;">Tạm thời không thể tải thống kê</p>';
-            });
-        } catch (e) {
-          myStatsContent.innerHTML = '<p>Vui lòng đăng nhập lại</p>';
-        }
+                </div>
+                <div style="font-size: 2rem; font-weight: 900; color: #fff; letter-spacing: -0.05em;">${(user.points || 0).toLocaleString()} <span style="font-size:0.9rem; color:var(--text-muted); font-weight: 700;">XP</span></div>
+              `;
+            } else {
+              localStorage.removeItem('wander_token');
+              showLoginPrompt();
+            }
+          }).catch(e => showLoginPrompt());
       } else if (myStatsContent) {
         showLoginPrompt();
       }
@@ -1025,7 +522,6 @@
           renderLeaderboard(allUsers);
         })
         .catch(err => {
-          console.error('Leaderboard fetch error:', err);
           list.innerHTML = '<div class="loading-wrap"><p style="color:var(--danger);">❌ Lỗi kết nối máy chủ</p></div>';
         });
 
@@ -1048,7 +544,6 @@
             const crownHtml = isFirst ? '<div class="podium-crown">👑</div>' : '';
             return `
               <div class="podium-item rank-${rank}">
-                <div class="podium-name-top" title="${u.displayName || u.name}">${u.displayName || u.name}</div>
                 <div class="podium-avatar-wrap">
                   ${crownHtml}
                   <div class="podium-avatar">
@@ -1056,9 +551,11 @@
                   </div>
                 </div>
                 <div class="podium-base">
-                  <div class="podium-badge-wrap">${WanderUI.getRankBadgeHTML(r, u.rankTier)}</div>
-                  <span class="podium-xp" style="margin-top: 5px;">${u.points.toLocaleString()}</span>
-                  <span class="podium-xp-label">XP</span>
+                  <div class="podium-name-top" title="${u.displayName || u.name}">${u.displayName || u.name}</div>
+                  <div style="display:flex; align-items:center; justify-content:center; gap:0.25rem; transform: scale(0.85); margin-bottom: 0.5rem;">
+                    ${WanderUI.getRankBadgeHTML(r, u.rankTier)}
+                  </div>
+                  <span class="podium-xp">${u.points.toLocaleString()} <small style="font-size:0.65rem; opacity:0.6; font-weight:700;">XP</small></span>
                 </div>
               </div>
             `;
@@ -1087,7 +584,9 @@
               </div>
               <div class="lb-info">
                 <span class="lb-name">${u.displayName || u.name}</span>
-                <div class="lb-tier">${WanderUI.getRankBadgeHTML(r, u.rankTier)}</div>
+                <div class="lb-tier" style="display:flex; align-items:center; gap:0.25rem; opacity: 0.8; transform: scale(0.85); transform-origin: left center;">
+                  ${WanderUI.getRankBadgeHTML(r, u.rankTier)}
+                </div>
               </div>
               <div class="lb-xp">
                 <span class="lb-xp-val">${u.points.toLocaleString()}</span>
@@ -1097,7 +596,7 @@
             list.appendChild(item);
           });
         } else if (users.length <= 3) {
-          list.innerHTML = '<p style="text-align:center; color:var(--text-muted); margin: 2rem 0;">Chưa có thêm nhà thám hiểm nào.</p>';
+          list.innerHTML = '<div style="text-align:center; padding: 4rem 2rem; opacity: 0.5;">Chưa có thêm nhà thám hiểm nào trong danh sách.</div>';
         }
       }
 

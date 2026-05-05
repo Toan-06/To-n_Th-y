@@ -78,13 +78,31 @@ router.put('/read/:id', sharedAuth, async (req, res) => {
     // Only recipient can mark as read if it was targeted
     if (notification.recipientId.startsWith('ROLE_') || notification.recipientId === 'ALL') {
         // Broadcast notifications might need a separate 'readBy' array in production, 
-        // but for now we'll just let anyone mark it
     } else if (notification.recipientId !== req.user.id) {
         return res.status(403).json({ success: false, message: 'Unauthorized' });
     }
 
     notification.isRead = true;
     await notification.save();
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// POST /api/notifications/read-all - Mark all as read
+router.post('/read-all', sharedAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const userRole = (req.user.role || 'user').toUpperCase();
+    await Notification.updateMany({
+      $or: [
+        { recipientId: userId },
+        { recipientId: 'ALL' },
+        { recipientId: `ROLE_${userRole}` }
+      ],
+      isRead: false
+    }, { isRead: true });
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Server error' });

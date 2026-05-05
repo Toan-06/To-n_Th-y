@@ -1,12 +1,15 @@
 const SocialHub = {
     user: null,
     posts: [],
+    stories: [],
     activeTab: 'feed',
     chatTarget: null,
     chatPollingInterval: null,
+    currentStoryIndex: 0,
+    storyProgressInterval: null,
 
     init: async function() {
-        console.log("📖 Social Hub v2 Initializing...");
+        console.log("📖 Social Hub v3 Initializing...");
         const token = localStorage.getItem('wander_token');
         if (!token) {
             this.showGuestLanding();
@@ -14,13 +17,14 @@ const SocialHub = {
         }
         await this.loadUserProfile();
         await this.fetchFeed();
-        this.renderStories();
+        await this.fetchStories();
         this.setupEventListeners();
         this.fetchPendingFriends();
         this.loadFriendSuggestions();
         this.loadFriendsList();
         this.loadConversations();
         this.renderTrending();
+        this.startStoriesAutoRefresh();
         
         // Handle URL parameters for direct chat/tab linking
         const params = new URLSearchParams(window.location.search);
@@ -63,16 +67,275 @@ const SocialHub = {
         } catch (err) { console.error("Lỗi tải hồ sơ:", err); }
     },
 
+    // ========== STORIES SYSTEM ==========
+    fetchStories: async function() {
+        try {
+            const res = await fetch('/api/social/stories', { 
+                headers: { 'x-auth-token': localStorage.getItem('wander_token') } 
+            });
+            const data = await res.json();
+            if (data.success) {
+                this.stories = data.data;
+                this.renderStories();
+            }
+        } catch (err) { 
+            console.error("Lỗi tải stories:", err);
+            this.renderStories(); // Render với stories rỗng
+        }
+    },
+
     renderStories: function() {
         const container = document.getElementById('stories-container');
         if (!container) return;
-        container.innerHTML = `
-            <div class="story-card create-story" onclick="document.getElementById('post-modal').removeAttribute('hidden')">
-                <div class="story-thumb" style="background-image: url('${this.user?.avatar || 'assets/assets/defg'}')"></div>
+        
+        // Lấy danh sách stories đã xem từ localStorage
+        const viewedStories = JSON.parse(localStorage.getItem('wander_viewed_stories') || '[]');
+        
+        let storiesHtml = `
+            <div class="story-card create-story" onclick="SocialHub.openCreateStoryModal()">
+                <div class="story-thumb" style="background-image: url('${this.user?.avatar || 'assets/default-avatar.svg'}')"></div>
                 <div class="story-add">+</div>
                 <span>Tạo tin</span>
             </div>
         `;
+        
+        // Group stories theo user
+        const userStories = {};
+        this.stories.forEach(story => {
+            if (!userStories[story.userId]) {
+                userStories[story.userId] = {
+                    user: story.user,
+                    stories: [],
+                    hasUnviewed: false
+                };
+            }
+            userStories[story.userId].stories.push(story);
+            if (!viewedStories.includes(story._id)) {
+                userStories[story.userId].hasUnviewed = true;
+            }
+        });
+        
+        // Render mỗi user chỉ 1 story card (hiển thị story mới nhất)
+        Object.values(userStories).forEach(group => {
+            const latestStory = group.stories[group.stories.length - 1];
+            const isViewed = viewedStories.includes(latestStory._id);
+            const ringClass = isViewed ? 'story-viewed' : 'story-unviewed';
+            
+            storiesHtml += `
+                <div class="story-card ${ringClass}" onclick="SocialHub.openStoryViewer('${group.user._id}')">
+                    <div class="story-thumb" style="background-image: url('${latestStory.media?.[0]?.url || group.user?.avatar || 'assets/default-avatar.svg'}')"></div>
+                    <span>${group.user?.displayName || group.user?.name || 'Người dùng'}</span>
+                </div>
+            `;
+        });
+        
+        container.innerHTML = storiesHtml;
+    },
+
+    openStoryViewer: function(userId) {
+        // Tìm tất cả stories của user này
+        const userStories = this.stories.filter(s => s.userId === userId);
+        if (userStories.length === 0) return;
+        
+        this.currentStoryUserId = userId;
+        this.currentStoryIndex = 0;
+        this.viewedStoriesList = userStories;
+        
+        // Tạo story viewer overlay
+        const overlay = document.createElement('div');
+        overlay.id = 'story-viewer-overlay';
+        overlay.className = 'story-viewer-overlay';
+        overlay.innerHTML = `
+            <div class="story-viewer">
+                <div class="story-progress-bars">
+                    ${userStories.map((_, i) => `<div class="story-progress-bar ${i === 0 ? 'active' : ''}" data-index="${i}"><div class="progress-fill"></div></div>`).join('')}
+                </div>
+                <div class="story-header">
+                    <div class="story-user-info">
+                        <img src="${userStories[0].user?.avatar || 'assets/default-avatar.svg'}" class="story-user-avatar">
+                        <span class="story-user-name">${userStories[0].user?.displayName || userStories[0].user?.name}</span>
+                        <span class="story-time">${this.formatTime(userStories[0].createdAt)}</span>
+                    </div>
+                    <button class="story-close" onclick="SocialHub.closeStoryViewer()">×</button>
+                </div>
+                <div class="story-content" id="story-content"></div>
+                <div class="story-nav story-prev" onclick="SocialHub.prevStory()"></div>
+                <div class="story-nav story-next" onclick="SocialHub.nextStory()"></div>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+        document.body.style.overflow = 'hidden';
+        
+        // Show first story
+        this.showStory(0);
+        
+        // Start progress
+        this.startStoryProgress();
+        
+        // Đánh dấu đã xem
+        this.markStoryAsViewed(userStories[0]._id);
+    },
+
+    showStory: function(index) {
+        const story = this.viewedStoriesList[index];
+        if (!story) return;
+        
+        const content = document.getElementById('story-content');
+        const media = story.media?.[0];
+        
+        if (media?.type === 'video') {
+            content.innerHTML = `<video src="${media.url}" autoplay class="story-media"></video>`;
+        } else {
+            content.innerHTML = `<img src="${media?.url || story.user?.avatar}" class="story-media">`;
+        }
+        
+        // Update progress bars
+        document.querySelectorAll('.story-progress-bar').forEach((bar, i) => {
+            bar.classList.toggle('active', i === index);
+            bar.classList.toggle('completed', i < index);
+        });
+        
+        // Update time
+        document.querySelector('.story-time').textContent = this.formatTime(story.createdAt);
+    },
+
+    startStoryProgress: function() {
+        if (this.storyProgressInterval) clearInterval(this.storyProgressInterval);
+        
+        let progress = 0;
+        const duration = 5000; // 5 seconds per story
+        const interval = 50; // Update every 50ms
+        const step = 100 / (duration / interval);
+        
+        this.storyProgressInterval = setInterval(() => {
+            progress += step;
+            const activeBar = document.querySelector('.story-progress-bar.active .progress-fill');
+            if (activeBar) activeBar.style.width = `${Math.min(progress, 100)}%`;
+            
+            if (progress >= 100) {
+                this.nextStory();
+            }
+        }, interval);
+    },
+
+    nextStory: function() {
+        if (this.currentStoryIndex < this.viewedStoriesList.length - 1) {
+            this.currentStoryIndex++;
+            this.showStory(this.currentStoryIndex);
+            this.markStoryAsViewed(this.viewedStoriesList[this.currentStoryIndex]._id);
+            this.startStoryProgress();
+        } else {
+            this.closeStoryViewer();
+        }
+    },
+
+    prevStory: function() {
+        if (this.currentStoryIndex > 0) {
+            this.currentStoryIndex--;
+            this.showStory(this.currentStoryIndex);
+            this.startStoryProgress();
+        }
+    },
+
+    closeStoryViewer: function() {
+        if (this.storyProgressInterval) clearInterval(this.storyProgressInterval);
+        const overlay = document.getElementById('story-viewer-overlay');
+        if (overlay) overlay.remove();
+        document.body.style.overflow = '';
+    },
+
+    markStoryAsViewed: function(storyId) {
+        const viewed = JSON.parse(localStorage.getItem('wander_viewed_stories') || '[]');
+        if (!viewed.includes(storyId)) {
+            viewed.push(storyId);
+            localStorage.setItem('wander_viewed_stories', JSON.stringify(viewed));
+        }
+    },
+
+    openCreateStoryModal: function() {
+        // Tạo modal tạo story
+        const modal = document.createElement('div');
+        modal.id = 'create-story-modal';
+        modal.className = 'modal-overlay';
+        modal.innerHTML = `
+            <div class="create-story-modal">
+                <div class="modal-header">
+                    <h3>Tạo tin mới</h3>
+                    <button onclick="document.getElementById('create-story-modal').remove()">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="story-upload-area" onclick="document.getElementById('story-file-input').click()">
+                        <span class="upload-icon">📷</span>
+                        <p>Chọn ảnh hoặc video</p>
+                        <input type="file" id="story-file-input" accept="image/*,video/*" hidden onchange="SocialHub.handleStoryUpload(this)">
+                    </div>
+                    <div id="story-preview" style="display:none; margin-top:1rem;">
+                        <img id="story-preview-img" style="max-width:100%; border-radius:12px;">
+                        <video id="story-preview-video" style="max-width:100%; border-radius:12px; display:none;" controls></video>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn--primary btn--block" onclick="SocialHub.submitStory()" id="story-submit-btn" disabled>Đăng tin</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    },
+
+    handleStoryUpload: function(input) {
+        const file = input.files[0];
+        if (!file) return;
+        
+        const preview = document.getElementById('story-preview');
+        const img = document.getElementById('story-preview-img');
+        const video = document.getElementById('story-preview-video');
+        
+        preview.style.display = 'block';
+        
+        if (file.type.startsWith('video/')) {
+            img.style.display = 'none';
+            video.style.display = 'block';
+            video.src = URL.createObjectURL(file);
+        } else {
+            video.style.display = 'none';
+            img.style.display = 'block';
+            img.src = URL.createObjectURL(file);
+        }
+        
+        document.getElementById('story-submit-btn').disabled = false;
+        this.storyFileToUpload = file;
+    },
+
+    submitStory: async function() {
+        if (!this.storyFileToUpload) return;
+        
+        const formData = new FormData();
+        formData.append('media', this.storyFileToUpload);
+        
+        try {
+            const res = await fetch('/api/social/stories', {
+                method: 'POST',
+                headers: { 'x-auth-token': localStorage.getItem('wander_token') },
+                body: formData
+            });
+            const data = await res.json();
+            if (data.success) {
+                document.getElementById('create-story-modal').remove();
+                this.storyFileToUpload = null;
+                this.fetchStories(); // Refresh stories
+                if (window.WanderUI) WanderUI.showToast('Đã đăng tin!', 'success');
+            }
+        } catch (err) {
+            console.error("Lỗi đăng story:", err);
+            if (window.WanderUI) WanderUI.showToast('Lỗi đăng tin', 'error');
+        }
+    },
+
+    startStoriesAutoRefresh: function() {
+        // Refresh stories mỗi 2 phút
+        setInterval(() => {
+            this.fetchStories();
+        }, 120000);
     },
 
     fetchFeed: async function() {
@@ -97,14 +360,27 @@ const SocialHub = {
     },
 
     renderPostCard: function(post) {
-        const isLiked = post.likes.includes(this.user?._id);
-        const isOwner = post.userId === this.user?._id || post.userId?.toString() === this.user?._id;
-        const commentsHtml = (post.comments || []).slice(-3).map(c => `
-            <div class="comment-item">
-                <img src="${c.userAvatar || 'assets/default-avatar.svg'}" class="comment-avatar" alt="" onerror="if(!this.dataset.errorHandled){this.dataset.errorHandled='true';this.src='assets/default-avatar.svg'}">
-                <div class="comment-body"><strong>${c.userName}</strong> ${c.text}</div>
-            </div>
-        `).join('');
+        // Xử lý reactions (6 loại: like, love, wow, haha, sad, angry)
+        const reactions = post.reactions || {};
+        const userReaction = reactions[this.user?._id] || null;
+        const totalReactions = Object.values(reactions).length;
+        
+        // Đếm từng loại reaction
+        const reactionCounts = { like: 0, love: 0, wow: 0, haha: 0, sad: 0, angry: 0 };
+        Object.values(reactions).forEach(r => {
+            if (reactionCounts[r] !== undefined) reactionCounts[r]++;
+        });
+        
+        // Top 3 reactions để hiển thị
+        const topReactions = Object.entries(reactionCounts)
+            .filter(([_, count]) => count > 0)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 3)
+            .map(([type]) => type);
+        
+        const postAuthorId = post.userId?._id || post.userId;
+        const isOwner = postAuthorId === this.user?._id || postAuthorId?.toString() === this.user?._id;
+        const commentsHtml = (post.comments || []).slice(-3).map(c => this.renderCommentItem(c, postAuthorId)).join('');
 
         return `
             <div class="glass-card post-card" data-post-id="${post._id}">
@@ -116,36 +392,229 @@ const SocialHub = {
                             <span class="post-time">${this.formatTime(post.createdAt)}${post.location?.name ? ' · 📍' + post.location.name : ''}</span>
                         </div>
                     </div>
-                    ${isOwner ? `<button class="btn-icon post-menu-btn" onclick="SocialHub.deletePost('${post._id}')">🗑️</button>` : ''}
+                    ${isOwner ? `
+                        <div class="post-menu-dropdown">
+                            <button class="btn-icon post-menu-btn" onclick="SocialHub.togglePostMenu('${post._id}')">⋯</button>
+                            <div class="post-menu" id="post-menu-${post._id}" style="display:none">
+                                <button onclick="SocialHub.editPost('${post._id}')">✏️ Chỉnh sửa</button>
+                                <button onclick="SocialHub.deletePost('${post._id}')" class="text-danger">🗑️ Xóa</button>
+                            </div>
+                        </div>
+                    ` : ''}
                 </div>
                 <div class="post-content">${this.linkifyContent(post.content)}</div>
                 ${post.media && post.media.length > 0 ? `
                     <div class="post-media ${post.media.length > 1 ? 'media-grid' : ''}">
-                        ${post.media.map(m => m.type === 'image' ? `<img src="${m.url}" alt="Ảnh bài viết" onclick="SocialHub.viewImage('${m.url}')" onerror="this.style.display='none'">` : `<video src="${m.url}" controls></video>`).join('')}
+                        ${post.media.map((m, i) => m.type === 'image' 
+                            ? `<img src="${m.url}" alt="Ảnh bài viết" onclick="SocialHub.viewImage('${m.url}')" onerror="this.style.display='none'">` 
+                            : `<video src="${m.url}" controls ${i === 0 ? 'autoplay muted' : ''}></video>`
+                        ).join('')}
                     </div>
                 ` : ''}
-                <div class="post-stats">
-                    <span>❤️ ${post.likes.length} lượt thích</span>
-                    <span>${(post.comments || []).length} bình luận</span>
+                
+                <!-- Reactions Bar -->
+                <div class="post-reactions-bar">
+                    ${topReactions.length > 0 ? `
+                        <div class="reactions-display" onclick="SocialHub.showReactionsList('${post._id}')">
+                            ${topReactions.map(r => `<span class="reaction-emoji">${this.getReactionEmoji(r)}</span>`).join('')}
+                            <span class="reaction-count">${totalReactions}</span>
+                        </div>
+                    ` : '<div></div>'}
+                    <span class="comments-shares-count">${(post.comments || []).length} bình luận · ${post.shares || 0} lượt chia sẻ</span>
                 </div>
+                
+                <!-- Action Buttons -->
                 <div class="post-footer">
-                    <button class="post-action ${isLiked ? 'liked' : ''}" onclick="SocialHub.toggleLike('${post._id}', ${isLiked})">
-                        ${isLiked ? '❤️' : '🤍'} Thích
-                    </button>
+                    <div class="reaction-wrapper" 
+                         onmouseleave="SocialHub.hideReactionPicker('${post._id}')">
+                        <button class="post-action ${userReaction ? 'has-reaction reaction-' + userReaction : ''}" 
+                                onclick="SocialHub.toggleReaction('${post._id}')"
+                                onmouseenter="SocialHub.showReactionPicker('${post._id}')">
+                            ${userReaction ? `<span class="reaction-active-emoji">${this.getReactionEmoji(userReaction)}</span> ${this.getReactionLabel(userReaction)}` : '<i class="far fa-heart"></i> Thích'}
+                        </button>
+                        <!-- Reaction Picker -->
+                        <div class="reaction-picker" id="reaction-picker-${post._id}">
+                            <span onclick="SocialHub.setReaction('${post._id}', 'like')" class="reaction-btn">❤️</span>
+                            <span onclick="SocialHub.setReaction('${post._id}', 'love')" class="reaction-btn">😍</span>
+                            <span onclick="SocialHub.setReaction('${post._id}', 'wow')" class="reaction-btn">😮</span>
+                            <span onclick="SocialHub.setReaction('${post._id}', 'haha')" class="reaction-btn">😂</span>
+                            <span onclick="SocialHub.setReaction('${post._id}', 'sad')" class="reaction-btn">😢</span>
+                            <span onclick="SocialHub.setReaction('${post._id}', 'angry')" class="reaction-btn">😠</span>
+                        </div>
+                    </div>
                     <button class="post-action" onclick="SocialHub.toggleCommentBox('${post._id}')">💬 Bình luận</button>
-                    <button class="post-action" onclick="SocialHub.sharePost('${post._id}')">🔗 Chia sẻ</button>
+                    <button class="post-action" onclick="SocialHub.sharePost('${post._id}')">↗️ Chia sẻ</button>
                 </div>
+                
+                <!-- Comments Section -->
                 <div class="comment-section" id="comments-${post._id}" style="display:none">
-                    <div class="comments-list">${commentsHtml || '<p style="color:var(--text-muted);font-size:0.85rem;padding:8px 0;">Chưa có bình luận.</p>'}</div>
+                    <div class="comments-list" id="comments-list-${post._id}">
+                        ${commentsHtml || '<p class="no-comments">Chưa có bình luận. Hãy là người đầu tiên!</p>'}
+                    </div>
                     ${(post.comments || []).length > 3 ? `<button class="show-all-comments" onclick="SocialHub.showAllComments('${post._id}')">Xem tất cả ${post.comments.length} bình luận</button>` : ''}
                     <div class="comment-input-wrap">
                         <img src="${this.user?.avatar || 'assets/default-avatar.svg'}" class="comment-avatar" alt="" onerror="this.src='assets/default-avatar.svg'">
-                        <input type="text" placeholder="Viết bình luận..." id="comment-input-${post._id}" onkeydown="if(event.key==='Enter')SocialHub.addComment('${post._id}')">
-                        <button class="comment-send-btn" onclick="SocialHub.addComment('${post._id}')">➤</button>
+                        <div class="comment-input-box">
+                            <input type="text" placeholder="Viết bình luận..." id="comment-input-${post._id}" 
+                                   onkeydown="if(event.key==='Enter')SocialHub.addComment('${post._id}')">
+                            <button class="comment-send-btn" onclick="SocialHub.addComment('${post._id}')">➤</button>
+                        </div>
                     </div>
                 </div>
             </div>
         `;
+    },
+
+    // ========== REACTIONS SYSTEM ==========
+    getReactionEmoji: function(type) {
+        const emojis = { like: '❤️', love: '😍', wow: '😮', haha: '😂', sad: '😢', angry: '😠' };
+        return emojis[type] || '❤️';
+    },
+
+    getReactionLabel: function(type) {
+        const labels = { like: 'Thích', love: 'Yêu thích', wow: 'Wow', haha: 'Haha', sad: 'Buồn', angry: 'Phẫn nộ' };
+        return labels[type] || 'Thích';
+    },
+
+    toggleReaction: function(postId) {
+        // Toggle like mặc định nếu chưa có reaction
+        const post = this.posts.find(p => p._id === postId);
+        if (!post) return;
+        
+        const currentReaction = post.reactions?.[this.user._id];
+        if (currentReaction) {
+            this.removeReaction(postId);
+        } else {
+            this.setReaction(postId, 'like');
+        }
+    },
+
+    setReaction: function(postId, reactionType) {
+        // Gửi reaction lên server
+        fetch(`/api/social/posts/${postId}/reaction`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'x-auth-token': localStorage.getItem('wander_token')
+            },
+            body: JSON.stringify({ reaction: reactionType })
+        }).then(res => res.json()).then(data => {
+            if (data.success) {
+                // Cập nhật local
+                const post = this.posts.find(p => p._id === postId);
+                if (post) {
+                    if (!post.reactions) post.reactions = {};
+                    post.reactions[this.user._id] = reactionType;
+                    this.renderFeed();
+                }
+                this.hideReactionPicker(postId);
+            }
+        }).catch(err => console.error('Reaction error:', err));
+    },
+
+    removeReaction: function(postId) {
+        fetch(`/api/social/posts/${postId}/reaction`, {
+            method: 'DELETE',
+            headers: { 'x-auth-token': localStorage.getItem('wander_token') }
+        }).then(res => res.json()).then(data => {
+            if (data.success) {
+                const post = this.posts.find(p => p._id === postId);
+                if (post && post.reactions) {
+                    delete post.reactions[this.user._id];
+                    this.renderFeed();
+                }
+            }
+        }).catch(err => console.error('Remove reaction error:', err));
+    },
+
+    showReactionPicker: function(postId) {
+        if (this.pickerTimeout) clearTimeout(this.pickerTimeout);
+        const picker = document.getElementById(`reaction-picker-${postId}`);
+        if (picker) picker.classList.add('visible');
+    },
+
+    hideReactionPicker: function(postId) {
+        this.pickerTimeout = setTimeout(() => {
+            const picker = document.getElementById(`reaction-picker-${postId}`);
+            if (picker) picker.classList.remove('visible');
+        }, 300);
+    },
+
+    showReactionsList: function(postId) {
+        const post = this.posts.find(p => p._id === postId);
+        if (!post || !post.reactions) return;
+        
+        // Tạo modal hiển thị danh sách người đã react
+        const reactions = post.reactions;
+        const users = Object.entries(reactions).map(([userId, reaction]) => ({ userId, reaction }));
+        
+        const modal = document.createElement('div');
+        modal.className = 'modal-overlay reactions-list-modal';
+        modal.innerHTML = `
+            <div class="glass-card reactions-modal-content">
+                <div class="modal-header">
+                    <h3>Lượt thích · ${Object.keys(reactions).length}</h3>
+                    <button onclick="this.closest('.modal-overlay').remove()">×</button>
+                </div>
+                <div class="reactions-tabs">
+                    <button class="tab active" data-tab="all">Tất cả</button>
+                    ${['like', 'love', 'wow', 'haha', 'sad', 'angry'].map(r => 
+                        `<button class="tab" data-tab="${r}">${this.getReactionEmoji(r)}</button>`
+                    ).join('')}
+                </div>
+                <div class="reactions-list">
+                    ${users.map(u => `
+                        <div class="reaction-user-item">
+                            <img src="assets/default-avatar.svg" class="avatar-sm">
+                            <span>Người dùng</span>
+                            <span class="user-reaction">${this.getReactionEmoji(u.reaction)}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    },
+
+    renderCommentItem: function(comment, postAuthorId) {
+        const isAuthor = (comment.userId?._id || comment.userId) === postAuthorId;
+        return `
+            <div class="comment-item" data-comment-id="${comment._id}">
+                <img src="${comment.userAvatar || 'assets/default-avatar.svg'}" class="comment-avatar" 
+                     onerror="if(!this.dataset.errorHandled){this.dataset.errorHandled='true';this.src='assets/default-avatar.svg'}">
+                <div class="comment-content">
+                    <div class="comment-bubble">
+                        <div class="comment-user-info">
+                            <strong>${comment.userName}</strong>
+                            ${isAuthor ? '<span class="author-badge">Tác giả</span>' : ''}
+                        </div>
+                        <span class="comment-text">${this.linkifyContent(comment.text)}</span>
+                    </div>
+                    <div class="comment-actions">
+                        <button onclick="SocialHub.likeComment('${comment._id}')">Thích</button>
+                        <button onclick="SocialHub.replyComment('${comment._id}')">Trả lời</button>
+                        <span class="comment-time">${this.formatTime(comment.createdAt)}</span>
+                    </div>
+                    ${comment.replies?.length > 0 ? `
+                        <div class="comment-replies">
+                            ${comment.replies.map(r => this.renderCommentItem(r, postAuthorId)).join('')}
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+    },
+
+    togglePostMenu: function(postId) {
+        const menu = document.getElementById(`post-menu-${postId}`);
+        if (menu) {
+            menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+        }
+    },
+
+    editPost: function(postId) {
+        // TODO: Implement edit functionality
+        if (window.WanderUI) WanderUI.showToast('Tính năng chỉnh sửa đang phát triển', 'info');
     },
 
     linkifyContent: function(text) {
@@ -212,8 +681,8 @@ const SocialHub = {
         // Chat send
         document.getElementById('chat-send-btn')?.addEventListener('click', () => this.sendMessage());
         document.getElementById('chat-input')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') this.sendMessage(); });
-        // Tab switching
-        document.querySelectorAll('.social-nav-tab').forEach(tab => {
+        // Tab switching (including mobile)
+        document.querySelectorAll('.social-nav-tab, .mobile-nav-item').forEach(tab => {
             tab.onclick = (e) => { e.preventDefault(); this.switchTab(tab.dataset.tab); };
         });
     },
@@ -228,8 +697,11 @@ const SocialHub = {
 
     switchTab: function(tab) {
         this.activeTab = tab;
-        document.querySelectorAll('.social-nav-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+        document.querySelectorAll('.social-nav-tab, .mobile-nav-item').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
         document.querySelectorAll('.tab-panel').forEach(p => p.style.display = p.id === `panel-${tab}` ? 'block' : 'none');
+        
+        // Scroll to top when switching tabs
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     },
 
     searchUsers: async function(query) {
@@ -241,7 +713,7 @@ const SocialHub = {
             if (data.success) {
                 resultsEl.innerHTML = data.data.map(u => `
                     <div class="search-result-item" onclick="SocialHub.viewProfile('${u._id}')">
-                        <img src="${u.avatar || 'defaultdefault-avatar.clg'}" class="avatar-xs" alt="" onerror="this.src='-avatardefaultvatar.png'">
+                        <img src="${u.avatar || 'assets/default-avatar.svg'}" class="avatar-xs" alt="" onerror="if(!this.dataset.errorHandled){this.dataset.errorHandled='true';this.src='assets/default-avatar.svg'}">
                         <div class="search-info">
                             <strong>${u.displayName || u.name}</strong>
                             <span>Hạng ${u.rank || 'Đồng'} · ${u.points || 0} XP</span>
@@ -315,7 +787,7 @@ const SocialHub = {
         if (list) {
             list.innerHTML = post.comments.map(c => `
                 <div class="comment-item">
-                    <img src="${c.userAvatar || 'defaultdefault-avatar.clg'}" class="comment-avatar" alt="" onerror="this.src='-avatardefaultvatar.png'">
+                    <img src="${c.userAvatar || 'assets/default-avatar.svg'}" class="comment-avatar" alt="" onerror="if(!this.dataset.errorHandled){this.dataset.errorHandled='true';this.src='assets/default-avatar.svg'}">
                     <div class="comment-body"><strong>${c.userName}</strong> ${c.text}</div>
                 </div>
             `).join('');
@@ -444,7 +916,7 @@ const SocialHub = {
             if (data.success && data.data.length > 0) {
                 container.innerHTML = data.data.map(f => `
                     <div class="friend-request-card">
-                        <img src="${f.requester?.avatar || '-avatar.png'}" pnass="avatar-sm" onerror="this.src='default.png'" onclick=pnocialHub.viewProfile('${f.requester?._id}')">
+                        <img src="${f.requester?.avatar || 'assets/default-avatar.svg'}" class="avatar-sm" onerror="if(!this.dataset.errorHandled){this.dataset.errorHandled='true';this.src='assets/default-avatar.svg'}" onclick="SocialHub.viewProfile('${f.requester?._id}')" style="cursor:pointer">
                         <div class="friend-info">
                             <strong>${f.requester?.displayName || f.requester?.name || 'Người dùng'}</strong>
                             <span>Hạng ${f.requester?.rank || 'Đồng'}</span>
@@ -479,8 +951,11 @@ const SocialHub = {
             if (data.success && data.data.length > 0) {
                 container.innerHTML = data.data.map(f => `
                     <div class="friend-item" onclick="SocialHub.viewProfile('${f._id}')">
-                        <img src="${f.avatar || '-avatar.png'}" pnass="avatar-xs" alt="" onerror="this.src='default.png'">pn
-                        <span>${f.displayName || f.name}</span>
+                        <img src="${f.avatar || 'assets/default-avatar.svg'}" class="avatar-sm" alt="" onerror="if(!this.dataset.errorHandled){this.dataset.errorHandled='true';this.src='assets/default-avatar.svg'}">
+                        <div class="friend-info">
+                            <strong>${f.displayName || f.name}</strong>
+                            <span>Hạng ${f.rank || 'Đồng'}</span>
+                        </div>
                         <button class="btn-xs btn--chat" onclick="event.stopPropagation(); SocialHub.openChat('${f._id}', '${(f.displayName || f.name).replace(/'/g, '')}', '${f.avatar || ''}')">💬</button>
                     </div>
                 `).join('');

@@ -310,13 +310,19 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
     if (!rank) return '';
     const tierKey = (tier === 'I' || tier === '1') ? '1' : (tier === 'II' || tier === '2') ? '2' : (tier === 'III' || tier === '3') ? '3' : '1';
     let rankClass = 'rank-bronze-1';
-    if (rank.includes('Đồng')) rankClass = `rank-bronze-${tierKey}`;
+    if (rank.includes('Bạch Kim')) rankClass = `rank-platinum-${tierKey}`;
     else if (rank.includes('Bạc')) rankClass = `rank-silver-${tierKey}`;
+    else if (rank.includes('Đồng')) rankClass = `rank-bronze-${tierKey}`;
     else if (rank.includes('Vàng')) rankClass = `rank-gold-${tierKey}`;
-    else if (rank.includes('Bạch Kim')) rankClass = `rank-platinum-${tierKey}`;
     else if (rank.includes('Kim Cương')) rankClass = `rank-diamond-${tierKey}`;
     else if (rank.includes('Huyền Thoại')) rankClass = 'rank-legendary';
-    return `<div class="rank-sprite ${rankClass}"></div><span class="rank-text">${rank}${tier ? ' ' + tier : ''}</span>`;
+    return `<div class="rank-badge-container" style="display:inline-flex; align-items:center;">
+      <div class="rank-sprite ${rankClass}"></div>
+    </div>`;
+  }
+
+  function getStoreKey(base) {
+    return 'wv_' + base;
   }
 
   // ─── Auth Sync ──────────────────────────────────────────────────
@@ -1132,12 +1138,16 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
       .rank-bronze-1, .rank-bronze-2, .rank-bronze-3 { background-image: url('assets/img/rank_bronze.png'); }
       .rank-silver-1, .rank-silver-2, .rank-silver-3 { background-image: url('assets/img/rank_silver.png'); }
       .rank-gold-1, .rank-gold-2, .rank-gold-3 { background-image: url('assets/img/rank_gold.png'); }
-      .rank-platinum-1, .rank-platinum-2, .rank-platinum-3 { background-image: url('assets/img/rank_platinum.png'); }
+      .rank-platinum-1, .rank-platinum-2, .rank-platinum-3 { 
+        background-image: url('assets/img/rank_platinum.png'); 
+        filter: url(#remove-black) hue-rotate(-20deg) brightness(1.3) saturate(1.2) drop-shadow(0 0 5px rgba(0, 240, 255, 0.4));
+      }
       .rank-diamond-1, .rank-diamond-2, .rank-diamond-3 { background-image: url('assets/img/rank_diamond.png'); }
       .rank-legendary {
-        background-image: url('assets/img/rank-sprites.png'); background-size: 256px 170.5px; background-position: -181px -106px;
-        width: 80px; height: 80px; filter: url(#remove-black) drop-shadow(0 0 4px rgba(0,0,0,0.9));
-        transform: scale(1.6); transform-origin: center 40%;
+        background-image: url('assets/img/rank_legendary_premium.png?v=6000');
+        width: 80px; height: 80px; 
+        transform: scale(1.3); transform-origin: center;
+        filter: drop-shadow(0 0 8px rgba(168, 85, 247, 0.5));
       }
       .wander-toast {
         pointer-events: auto; min-width: 300px; padding: 1rem 1.25rem; border-radius: 14px;
@@ -1862,13 +1872,25 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
       return;
     }
 
-    // 4. Logout
+    // 4. Theme Selection
+    const themeOpt = e.target.closest('[data-theme-set]');
+    if (themeOpt) {
+      const theme = themeOpt.getAttribute('data-theme-set');
+      setTheme(theme, true);
+      document.querySelectorAll('[data-theme-set]').forEach(opt => opt.classList.remove('is-active'));
+      themeOpt.classList.add('is-active');
+      const autoThemeCheck = document.getElementById('auto-theme');
+      if (autoThemeCheck) autoThemeCheck.checked = false;
+      return;
+    }
+
+    // 5. Logout
     if (e.target.closest('[data-logout-btn], [data-logout]')) {
       forceLogout();
       return;
     }
 
-    // 5. User Dropdown Toggle
+    // 6. User Dropdown Toggle
     const btnToggle = e.target.closest('[data-user-toggle]');
     if (btnToggle) {
       e.stopPropagation();
@@ -1878,12 +1900,99 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
       return;
     }
 
-    // 6. Close Dropdown on outside click
+    // 7. Close Dropdown on outside click
     const bubble = document.querySelector('[data-user-bubble]');
     if (bubble && !bubble.contains(e.target)) {
       toggleUserMenu(false);
     }
   });
+
+  // --- Settings Form Handlers ---
+  function initSettingsHandlers() {
+    // Password Form
+    const pwdForm = document.querySelector('[data-password-form-v2]');
+    if (pwdForm) {
+      pwdForm.onsubmit = async (e) => {
+        e.preventDefault();
+        const status = document.querySelector('[data-password-status-v2]');
+        const btn = pwdForm.querySelector('button[type="submit"]');
+        const fd = new FormData(pwdForm);
+        const data = Object.fromEntries(fd.entries());
+
+        setButtonLoading(btn, true);
+        if (status) status.textContent = "";
+
+        try {
+          const token = localStorage.getItem('wander_token');
+          const res = await fetch('/api/auth/change-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-auth-token': token },
+            body: JSON.stringify(data)
+          });
+          const json = await res.json();
+          if (json.success) {
+            showToast("Đổi mật khẩu thành công!", "success");
+            pwdForm.reset();
+          } else {
+            if (status) {
+              status.style.color = "var(--danger)";
+              status.textContent = json.message || "Lỗi đổi mật khẩu";
+            }
+          }
+        } catch (err) {
+          showToast("Lỗi kết nối máy chủ", "error");
+        } finally {
+          setButtonLoading(btn, false);
+        }
+      };
+    }
+
+    // Auto Theme Checkbox
+    const autoTheme = document.getElementById('auto-theme');
+    if (autoTheme) {
+      autoTheme.onchange = function() {
+        if (this.checked) {
+          const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          setTheme(isDark ? 'dark' : 'light', true);
+          document.querySelectorAll('[data-theme-set]').forEach(opt => {
+            opt.classList.toggle('is-active', opt.dataset.themeSet === (isDark ? 'dark' : 'light'));
+          });
+        }
+      };
+    }
+
+    // Profile Form V2 (if exists in settings)
+    const profileForm = document.querySelector('[data-profile-form-v2]');
+    if (profileForm) {
+      profileForm.onsubmit = async (e) => {
+        e.preventDefault();
+        const btn = profileForm.querySelector('button[type="submit"]');
+        const fd = new FormData(profileForm);
+        const data = Object.fromEntries(fd.entries());
+
+        setButtonLoading(btn, true);
+        try {
+          const token = localStorage.getItem('wander_token');
+          const res = await fetch('/api/auth/user/update', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'x-auth-token': token },
+            body: JSON.stringify(data)
+          });
+          const json = await res.json();
+          if (json.success) {
+            showToast("Cập nhật thông tin thành công!", "success");
+            syncAuthUI(); // Refresh header
+          } else {
+            showToast(json.message || "Lỗi cập nhật", "error");
+          }
+        } catch (err) {
+          showToast("Lỗi kết nối máy chủ", "error");
+        } finally {
+          setButtonLoading(btn, false);
+        }
+      };
+    }
+  }
 
   // --- Modal Utilities ---
   function openAuthModal(tab = 'login') {
@@ -1965,6 +2074,7 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
     syncAuthUI();
     initTheme();
     initGlobalChatbot();
+    initSettingsHandlers();
   };
 
   if (document.readyState === 'loading') {
@@ -1973,7 +2083,7 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
     initAll();
   }
 
-  return { setTheme, toggleTheme, showToast, setButtonLoading, toggleNotificationDrawer, updateNotificationBadge, markAsRead, markAllAsRead, syncAuthUI, forceLogout, toggleUserMenu, openAuthModal, confirm, openPlaceDetail };
+  return { setTheme, toggleTheme, showToast, setButtonLoading, toggleNotificationDrawer, updateNotificationBadge, markAsRead, markAllAsRead, syncAuthUI, forceLogout, toggleUserMenu, openAuthModal, confirm, openPlaceDetail, getRankBadgeHTML, getRankIcon, getStoreKey, initSettingsHandlers };
 })());
 
 

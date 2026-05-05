@@ -106,6 +106,7 @@ const verifyPortalToken = (expectedPortal) => async (req, res, next) => {
         status: accountData.status,
         displayName: accountData.displayName || accountData.name,
         name: accountData.name,
+        avatar: accountData.avatar || '',
         portal: account.portal || expectedPortal
       };
     } else {
@@ -116,6 +117,7 @@ const verifyPortalToken = (expectedPortal) => async (req, res, next) => {
         status: account.status,
         displayName: account.displayName || account.name,
         name: account.name,
+        avatar: account.avatar || '',
         portal: account.portal
       };
     }
@@ -124,9 +126,20 @@ const verifyPortalToken = (expectedPortal) => async (req, res, next) => {
   } catch (err) {
     if (err.name === 'JsonWebTokenError' && err.message === 'invalid signature') {
       console.warn(`[Auth] Signature mismatch from ${req.ip}. Cleared stale token on server.`);
-    } else {
-      console.error('JWT Verification Error:', err.message);
+      return res.status(401).json({ success: false, message: 'Auth: Invalid signature' });
+    } 
+    
+    // Xử lý lỗi kết nối Database (DNS, Network)
+    if (err.name === 'MongoNetworkError' || err.message.includes('getaddrinfo') || err.message.includes('selection timeout')) {
+      console.error('❌ Database Connection Error during Auth:', err.message);
+      return res.status(503).json({ 
+        success: false, 
+        message: 'Dịch vụ tạm thời không khả dụng do lỗi kết nối máy chủ dữ liệu. Vui lòng kiểm tra mạng của bạn.',
+        error: 'DATABASE_CONNECTION_ERROR' 
+      });
     }
+
+    console.error('JWT Verification Error:', err.message);
     return res.status(401).json({ success: false, message: 'Auth: JWT verification failed', error: err.message });
   }
 };

@@ -31,6 +31,8 @@
 
                 <nav class="social-nav">
                     <a href="#" class="social-nav-tab active" data-tab="feed"><i>🏠</i> <span>Bảng tin</span></a>
+                    <a href="#" class="social-nav-tab" data-tab="explore"><i>🔍</i> <span>Khám phá</span></a>
+                    <a href="#" class="social-nav-tab" data-tab="communities"><i>🏘️</i> <span>Cộng đồng</span></a>
                     <a href="#" class="social-nav-tab" data-tab="messages"><i>💬</i> <span>Tin nhắn</span></a>
                     <a href="#" class="social-nav-tab" data-tab="friends"><i>👥</i> <span>Bạn bè</span></a>
                     <a href="profile.html" class="social-nav-item"><i>👤</i> <span>Trang cá nhân</span></a>
@@ -65,6 +67,37 @@
                     </div>
 
                     <div id="feed-container"></div>
+                </div>
+
+                <!-- Tab: Explore -->
+                <div class="tab-panel" id="panel-explore" style="display:none">
+                    <div class="explore-header">
+                        <h2>🔍 Khám phá</h2>
+                        <div class="explore-tabs">
+                            <button class="explore-tab active" data-explore="trending">🔥 Xu hướng</button>
+                            <button class="explore-tab" data-explore="places">📍 Địa điểm</button>
+                            <button class="explore-tab" data-explore="photos">📸 Ảnh</button>
+                            <button class="explore-tab" data-explore="videos">🎥 Video</button>
+                        </div>
+                    </div>
+                    <div id="explore-container" class="explore-grid">
+                        <div class="explore-loading">Đang tải nội dung khám phá...</div>
+                    </div>
+                </div>
+
+                <!-- Tab: Communities -->
+                <div class="tab-panel" id="panel-communities" style="display:none">
+                    <div class="communities-header">
+                        <h2>🏘️ Cộng đồng</h2>
+                        <button class="btn btn--primary" onclick="SocialHub.openCreateCommunityModal()">+ Tạo cộng đồng</button>
+                    </div>
+                    <div class="communities-tabs">
+                        <button class="community-tab active" data-community-tab="joined">Cộng đồng của tôi</button>
+                        <button class="community-tab" data-community-tab="discover">Khám phá</button>
+                    </div>
+                    <div id="communities-container" class="communities-grid">
+                        <div class="communities-loading">Đang tải cộng đồng...</div>
+                    </div>
                 </div>
 
                 <!-- Tab: Messages -->
@@ -148,7 +181,15 @@
         </div>
     </div>
 
-    <script src="SharedUI.js" defer></script>
-    <script src="social-hub.js" defer></script>
+    <nav class="mobile-bottom-nav">
+        <a href="#" class="mobile-nav-item active" data-tab="feed"><i>🏠</i><span>Bảng tin</span></a>
+        <a href="#" class="mobile-nav-item" data-tab="explore"><i>🔍</i><span>Khám phá</span></a>
+        <a href="#" class="mobile-nav-item" data-tab="communities"><i>🏘️</i><span>Cộng đồng</span></a>
+        <a href="#" class="mobile-nav-item" data-tab="messages"><i>💬</i><span>Tin nhắn</span></a>
+        <a href="#" class="mobile-nav-item" data-tab="friends"><i>👥</i><span>Bạn bè</span></a>
+    </nav>
+
+    <script src="SharedUI.js"></script>
+    <script src="social-hub.js"></script>
 </body>
 </html>
