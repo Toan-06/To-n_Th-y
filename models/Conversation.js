@@ -7,6 +7,7 @@ const ConversationSchema = new mongoose.Schema({
   title: { type: String }, // Tiêu đề phiên chat (không để mặc định để dễ backfill)
   role: { type: String, enum: ['user', 'model'], required: true },
   text: { type: String, required: true, index: true },
+  hasProposal: { type: Boolean, default: false },
   timestamp: { type: Date, default: Date.now },
   // Trí tuệ tự học (RLHF)
   feedback: { type: String, enum: ['up', 'down', 'none'], default: 'none' },

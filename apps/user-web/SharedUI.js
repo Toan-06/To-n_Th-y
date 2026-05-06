@@ -650,6 +650,11 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
     if (!document.querySelector('script[src*="voice-helper.js"]')) {
       const script2 = document.createElement('script');
       script2.src = 'voice-helper.js';
+      script2.onload = () => {
+        if (window.WanderUI && window.WanderUI.setupVoiceIntegration) {
+          window.WanderUI.setupVoiceIntegration();
+        }
+      };
       document.body.appendChild(script2);
     }
 
@@ -1305,6 +1310,211 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
         padding-top: 0.625rem; margin-top: 0.5rem;
       }
       .activity-cost { font-weight: 700; color: #059669; font-size: 0.9rem; }
+
+      /* Proposal Card Styles - Generation 3.0 Super Premium */
+      .chat-proposal-card-premium {
+        margin: 12px 0; padding: 18px; border-radius: 22px;
+        background: linear-gradient(165deg, #1e293b, #0f172a);
+        border: 1px solid rgba(16, 185, 129, 0.25);
+        box-shadow: 0 15px 35px rgba(0,0,0,0.4);
+        animation: wander-toast-in 0.4s cubic-bezier(0.18,0.89,0.32,1.28);
+        flex-shrink: 0;
+        transition: transform 0.3s, border-color 0.3s;
+      }
+      .chat-proposal-card-premium:hover {
+        transform: translateY(-4px);
+        border-color: var(--accent);
+      }
+      .proposal-header {
+        font-size: 0.65rem; font-weight: 900; text-transform: uppercase;
+        color: var(--accent); letter-spacing: 1.2px; margin-bottom: 10px;
+        display: flex; align-items: center; gap: 6px;
+      }
+      .btn-proposal-action {
+        width: 100%; padding: 11px; border-radius: 12px;
+        background: linear-gradient(135deg, #10b981, #059669);
+        color: #fff; font-weight: 800; border: none; cursor: pointer;
+        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        font-size: 0.85rem; letter-spacing: 0.3px;
+        box-shadow: 0 4px 15px rgba(16,185,129,0.25);
+      }
+      .btn-proposal-action:hover {
+        filter: brightness(1.1);
+        transform: scale(1.02);
+        box-shadow: 0 6px 20px rgba(16,185,129,0.4);
+      }
+      .btn-proposal-action:active { transform: scale(0.97); }
+
+      /* Inline Itinerary Card in Chatbot - Premium Design */
+      .chat-itinerary-card {
+        margin: 10px 0; border-radius: 18px; overflow: hidden;
+        border: 1px solid rgba(59,130,246,0.2);
+        background: #0b1629;
+        box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+        animation: wander-toast-in 0.4s ease-out;
+        max-height: 600px; overflow-y: auto;
+        flex-shrink: 0;
+      }
+      .chat-itinerary-card::-webkit-scrollbar { width: 5px; }
+      .chat-itinerary-card::-webkit-scrollbar-thumb { background: rgba(59,130,246,0.25); border-radius: 4px; }
+      .chat-itin-hero {
+        padding: 20px 20px 16px;
+        background: radial-gradient(ellipse at top right, rgba(59,130,246,0.15), transparent),
+                    linear-gradient(160deg, #0d1b35, #0b1629);
+        border-bottom: 1px solid rgba(255,255,255,0.07);
+      }
+      .chat-itin-dest-pill {
+        display: inline-block; padding: 4px 12px;
+        background: rgba(59,130,246,0.18); color: #60a5fa;
+        border-radius: 30px; font-size: 0.68rem; font-weight: 900;
+        letter-spacing: 1.5px; margin-bottom: 10px;
+      }
+      .chat-itin-hero-title { font-size: 1.25rem; font-weight: 900; color: #fff; margin: 0 0 6px; line-height: 1.2; }
+      .chat-itin-hero-sub { font-size: 0.82rem; color: #94a3b8; margin: 0 0 14px; line-height: 1.5; }
+      .chat-itin-stats {
+        display: grid; grid-template-columns: repeat(3, 1fr);
+        gap: 10px; padding-top: 14px;
+        border-top: 1px solid rgba(255,255,255,0.07);
+      }
+      .chat-itin-stat { display: flex; flex-direction: column; gap: 3px; }
+      .chat-itin-stat-label { font-size: 0.6rem; font-weight: 800; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; }
+      .chat-itin-stat-val { font-size: 0.92rem; font-weight: 800; color: #38bdf8; }
+      .chat-itin-timeline { padding: 16px 16px 8px; display: flex; flex-direction: column; gap: 14px; }
+      .chat-itin-day-block { display: flex; gap: 12px; animation: slideInUp 0.5s ease-out both; }
+      .chat-itin-day-sidebar { display: flex; flex-direction: column; align-items: center; flex-shrink: 0; padding-top: 2px; }
+      .chat-itin-day-num {
+        width: 34px; height: 34px; border-radius: 50%;
+        background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+        color: #fff; font-weight: 900; font-size: 0.9rem;
+        display: flex; align-items: center; justify-content: center;
+        box-shadow: 0 4px 12px rgba(59,130,246,0.4);
+      }
+      .chat-itin-day-content { flex: 1; min-width: 0; }
+      .chat-itin-day-title { font-size: 0.88rem; font-weight: 800; color: #fff; margin-bottom: 6px; }
+      .chat-itin-day-sub { font-size: 0.75rem; color: #94a3b8; margin-bottom: 8px; }
+      .chat-itin-acts { display: flex; flex-direction: column; gap: 6px; }
+      .chat-itin-act-card {
+        display: flex; gap: 10px; padding: 10px 12px;
+        background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07);
+        border-radius: 10px; transition: background 0.2s;
+      }
+      .chat-itin-act-card:hover { background: rgba(59,130,246,0.08); border-color: rgba(59,130,246,0.2); }
+      .chat-itin-act-time { font-size: 0.7rem; font-weight: 800; color: #38bdf8; min-width: 48px; line-height: 1.4; padding-top: 1px; white-space: nowrap; }
+      .chat-itin-act-info { flex: 1; }
+      .chat-itin-act-name { font-size: 0.85rem; font-weight: 700; color: #fff; margin-bottom: 3px; }
+      .chat-itin-act-loc { font-size: 0.75rem; color: #94a3b8; margin-bottom: 2px; }
+      .chat-itin-act-tip { font-size: 0.72rem; color: #fbbf24; margin-top: 3px; }
+      .chat-itin-act-cost { display: inline-block; margin-top: 5px; padding: 2px 8px; background: rgba(16,185,129,0.12); color: #10b981; border-radius: 4px; font-size: 0.72rem; font-weight: 700; }
+      .chat-itin-actions {
+        display: flex; gap: 8px; padding: 10px 16px 14px;
+        border-top: 1px solid rgba(255,255,255,0.06); background: rgba(0,0,0,0.15);
+      }
+      .btn-save-itin, .btn-export-itin {
+        flex: 1; padding: 10px 12px; border-radius: 10px;
+        font-size: 0.83rem; font-weight: 700; cursor: pointer; border: none; transition: all 0.2s;
+      }
+      .btn-save-itin { background: linear-gradient(135deg, #10b981, #059669); color: #fff; box-shadow: 0 4px 12px rgba(16,185,129,0.3); }
+      .btn-save-itin:hover { filter: brightness(1.1); transform: translateY(-1px); }
+      .btn-export-itin { background: rgba(255,255,255,0.07); color: #94a3b8; border: 1px solid rgba(255,255,255,0.1); }
+      .btn-export-itin:hover { background: rgba(255,255,255,0.12); color: #fff; }
+
+      /* Quick Planner Mini-Form Skip Button */
+      .cqp-btn-skip {
+        width: 100%; padding: 9px 12px; border-radius: 10px;
+        background: rgba(255,255,255,0.04); border: 1px dashed rgba(255,255,255,0.15);
+        color: #64748b; font-size: 0.82rem; font-weight: 600;
+        cursor: pointer; margin-top: 6px; transition: all 0.2s;
+      }
+      .cqp-btn-skip:hover { color: #94a3b8; border-color: rgba(255,255,255,0.3); background: rgba(255,255,255,0.07); }
+
+      /* Quick Planner Mini-Form in Chatbot */
+      .chat-quick-planner-form {
+        margin: 10px 0; border-radius: 18px; overflow: hidden;
+        border: 1px solid rgba(59,130,246,0.3);
+        background: linear-gradient(160deg, #0f172a, #1e293b);
+        box-shadow: 0 16px 40px rgba(0,0,0,0.4);
+        animation: wander-toast-in 0.35s cubic-bezier(0.18,0.89,0.32,1.28);
+        transition: opacity 0.3s, transform 0.3s;
+        flex-shrink: 0;
+      }
+      .cqp-header {
+        display: flex; align-items: center; gap: 14px;
+        padding: 16px 18px 12px; background: rgba(59,130,246,0.08);
+        border-bottom: 1px solid rgba(59,130,246,0.15);
+      }
+      .cqp-icon { font-size: 1.8rem; width: 44px; height: 44px; background: rgba(59,130,246,0.15); border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+      .cqp-title { font-size: 0.95rem; font-weight: 800; color: #fff; margin-bottom: 2px; }
+      .cqp-sub { font-size: 0.75rem; color: #94a3b8; }
+      .cqp-body { padding: 14px 18px; display: flex; flex-direction: column; gap: 12px; }
+      .cqp-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+      .cqp-field { display: flex; flex-direction: column; gap: 5px; }
+      .cqp-field label { font-size: 0.75rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.3px; }
+      .cqp-optional { font-weight: 400; text-transform: none; opacity: 0.7; }
+      .cqp-field input, .cqp-field select, .cqp-field textarea {
+        width: 100%; padding: 9px 12px;
+        background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 10px; color: #fff; font-size: 0.88rem; font-family: inherit;
+        transition: border-color 0.2s, background 0.2s;
+        box-sizing: border-box;
+      }
+      .cqp-field input::placeholder, .cqp-field textarea::placeholder { color: #475569; }
+      .cqp-field input:focus, .cqp-field select:focus, .cqp-field textarea:focus {
+        outline: none; border-color: #3b82f6;
+        background: rgba(59,130,246,0.08);
+        box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
+      }
+      .cqp-field select option { background: #1e293b; }
+      .cqp-field textarea { resize: none; }
+      .cqp-actions {
+        padding: 12px 18px 16px;
+        border-top: 1px solid rgba(255,255,255,0.06);
+      }
+      .cqp-btn-submit {
+        width: 100%; padding: 12px; border: none; border-radius: 12px;
+        background: linear-gradient(135deg, #3b82f6, #2563eb);
+        color: #fff; font-size: 0.9rem; font-weight: 800;
+        cursor: pointer; letter-spacing: 0.3px;
+        transition: all 0.25s cubic-bezier(0.4,0,0.2,1);
+        box-shadow: 0 4px 16px rgba(59,130,246,0.35);
+      }
+      .cqp-btn-submit:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 24px rgba(59,130,246,0.5);
+        filter: brightness(1.1);
+      }
+      .cqp-btn-submit:disabled { opacity: 0.7; cursor: not-allowed; }
+      .chat-suggestion-container {
+        display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px;
+        padding: 0 4px;
+      }
+      .chat-suggestion-chip {
+        padding: 8px 16px; border-radius: 20px;
+        background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+        color: #fff; font-size: 0.82rem; font-weight: 600; cursor: pointer;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        white-space: nowrap;
+      }
+      .chat-suggestion-chip:hover {
+        background: var(--accent); color: #000;
+        border-color: var(--accent); transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(16,185,129,0.2);
+      }
+      .chat-suggestion-chip:active { transform: scale(0.96); }
+
+      .chat-discovery-card {
+        min-width: 180px; max-width: 180px; border-radius: 16px;
+        background: #1e293b; border: 1px solid rgba(255,255,255,0.05);
+        overflow: hidden; flex-shrink: 0; transition: transform 0.2s;
+        cursor: pointer;
+      }
+      .chat-discovery-card:hover { transform: translateY(-3px); border-color: var(--accent); }
+      .chat-discovery-img { height: 100px; background-size: cover; background-position: center; }
+      .chat-discovery-info { padding: 10px; }
+      .chat-discovery-name { font-size: 0.85rem; font-weight: 800; color: #fff; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .chat-discovery-loc { font-size: 0.7rem; color: #94a3b8; }
+
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     `;
     document.head.appendChild(style);
   })();
@@ -1339,19 +1549,104 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
       });
     });
 
-    let currentSessionId = localStorage.getItem('wander_current_session') || null;
+    // Đảm bảo mỗi lần reset trang là một phiên chat mới hoàn toàn (như ChatGPT)
+    // Các hội thoại cũ sẽ nằm trong phần Lịch sử (History)
+    localStorage.removeItem('wander_current_session');
+    localStorage.removeItem('wander_shared_chat');
+    let currentSessionId = null;
+
+    // --- VOICE INTEGRATION ---
+    function setupVoiceIntegration() {
+        if (window.voiceGuide) {
+            console.log("🎙️ WanderUI: Connecting VoiceGuide...");
+            window.voiceGuide.onResultCallback = (text) => {
+                console.log("🎙️ Voice Result:", text);
+                const inputEl = document.getElementById('global-chat-input');
+                const formEl = document.getElementById('global-chat-form');
+                if (inputEl && formEl) {
+                    inputEl.value = text;
+                    formEl.dispatchEvent(new Event('submit'));
+                }
+            };
+
+            const micBtn = document.getElementById('companion-toggle');
+            if (micBtn) {
+                micBtn.onclick = (e) => {
+                    e.preventDefault();
+                    if (window.voiceGuide.isListening) {
+                        window.voiceGuide.stop();
+                    } else {
+                        window.voiceGuide.start();
+                    }
+                };
+            }
+        }
+    }
+    // Expose for onload callback
+    window.WanderUI.setupVoiceIntegration = setupVoiceIntegration;
+    // Try immediate if already loaded
+    setupVoiceIntegration();
 
     function escapeHtml(unsafe) {
       return (unsafe || '').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     }
 
-    function appendMsg(text, role) {
+    function renderSuggestions(options = []) {
+      const container = document.createElement('div');
+      container.className = 'chat-suggestion-container';
+      options.forEach(opt => {
+        const chip = document.createElement('div');
+        chip.className = 'chat-suggestion-chip';
+        chip.textContent = opt.text;
+        chip.onclick = () => {
+          const input = document.getElementById('global-chat-input');
+          const form = document.getElementById('global-chat-form');
+          if (input && form) {
+            input.value = opt.query || opt.text;
+            form.dispatchEvent(new Event('submit'));
+          }
+        };
+        container.appendChild(chip);
+      });
+      log.appendChild(container);
+      log.scrollTop = log.scrollHeight;
+    }
+
+    const DEFAULT_SUGGESTIONS = [
+      { text: '🗺️ Lập lịch trình', query: 'Lập lịch trình du lịch cho mình' },
+      { text: '🏨 Tìm chỗ ở', query: 'Tìm khách sạn hoặc homestay đẹp' },
+      { text: '🍽️ Món ngon', query: 'Gợi ý các món ăn đặc sản địa phương' },
+      { text: '📸 Điểm check-in', query: 'Những địa điểm chụp ảnh đẹp nhất' }
+    ];
+
+    function appendMsg(text, role, isHtml) {
       if (!text) return;
+
+      let displayInfo = text;
+      let proposalsData = null;
+
+      // Phát hiện dữ liệu ẩn (JSON proposals) để render lại thẻ khi load lịch sử
+      if (text.includes('[ITIN_PROPOSALS:')) {
+          const start = text.indexOf('[ITIN_PROPOSALS:');
+          const end = text.lastIndexOf(']');
+          if (start !== -1 && end !== -1) {
+              const jsonStr = text.substring(start + 16, end);
+              try { proposalsData = JSON.parse(jsonStr); } catch(e) {}
+              displayInfo = text.substring(0, start).trim();
+          }
+      }
+
       const msg = document.createElement('div');
       msg.className = 'chat-bubble chat-bubble--' + (role === 'user' ? 'user' : 'bot');
-      msg.textContent = text;
+      if (isHtml) msg.innerHTML = displayInfo;
+      else msg.textContent = displayInfo;
       log.appendChild(msg);
       log.scrollTop = log.scrollHeight;
+
+      // Nếu có dữ liệu proposals, render các thẻ tương ứng
+      if (proposalsData) {
+          renderProposalOptions(proposalsData);
+      }
 
       // Cache to localStorage for instant load on next page
       try {
@@ -1378,6 +1673,7 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
           log.scrollTop = log.scrollHeight;
         } else if (!currentSessionId) {
           appendMsg('Xin chào! Tôi là Trợ lý WanderViệt 🌟 Hỏi tôi bất cứ điều gì về du lịch Việt Nam nhé!', 'bot');
+          renderSuggestions(DEFAULT_SUGGESTIONS);
         }
       } catch (e) {
         if (!currentSessionId) appendMsg('Xin chào! Tôi là Trợ lý WanderViệt 🌟 Hỏi tôi bất cứ điều gì về du lịch Việt Nam nhé!', 'bot');
@@ -1430,7 +1726,8 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
       }
       historyList.innerHTML = '<div class="chat-sessions-loading">Đang tải...</div>';
       
-      fetch("/api/chat/sessions", {
+      const deviceId = localStorage.getItem('wander_device_id');
+      fetch(`/api/chat/sessions?t=${Date.now()}&deviceId=${deviceId || ''}`, {
         headers: { 'x-auth-token': token }
       })
       .then(r => r.json())
@@ -1453,7 +1750,8 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
             delBtn.onclick = (e) => {
               e.stopPropagation();
               if (confirm('Xóa vĩnh viễn đoạn hội thoại này?')) {
-                fetch('/api/chat/session/' + s.sessionId, {
+                const deviceId = localStorage.getItem('wander_device_id');
+                fetch(`/api/chat/session/${s.sessionId}?deviceId=${deviceId || ''}`, {
                   method: 'DELETE',
                   headers: { 'x-auth-token': token }
                 })
@@ -1491,6 +1789,7 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
         localStorage.removeItem('wander_shared_chat');
         log.innerHTML = '';
         appendMsg('Chào bạn! Tôi đã sẵn sàng cho cuộc trò chuyện mới. Mình có thể giúp gì cho chuyến đi của bạn?', 'bot');
+        renderSuggestions(DEFAULT_SUGGESTIONS);
       };
     }
 
@@ -1527,21 +1826,12 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
       log.scrollTop = log.scrollHeight;
 
       try {
+        let resData;
         if (typeof window.wanderChatReply === 'function') {
-           const res = await window.wanderChatReply(msg, { 
+           resData = await window.wanderChatReply(msg, { 
              lang: localStorage.getItem('wander_chat_lang') || 'auto',
              sessionId: currentSessionId
            });
-           log.removeChild(tempBubble);
-           if (res.success) {
-             appendMsg(res.answer, 'bot');
-             if (res.sessionId) {
-               currentSessionId = res.sessionId;
-               localStorage.setItem('wander_current_session', currentSessionId);
-             }
-           } else {
-             appendMsg(res.answer || 'Xin lỗi, trợ lý đang bận. Vui lòng thử lại!', 'bot');
-           }
         } else {
            const token = localStorage.getItem('wander_token');
            const res = await fetch('/api/chat', {
@@ -1549,19 +1839,394 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
              headers: { 'Content-Type': 'application/json', 'x-auth-token': token || '' },
              body: JSON.stringify({ message: msg, lang: localStorage.getItem('wander_chat_lang') || 'auto', sessionId: currentSessionId })
            });
-           const json = await res.json();
-           log.removeChild(tempBubble);
-           appendMsg(json.answer || json.reply || json.message || 'Xin lỗi, tôi chưa hiểu câu hỏi này.', 'bot');
-           if (json.sessionId) {
-             currentSessionId = json.sessionId;
-             localStorage.setItem('wander_current_session', currentSessionId);
-           }
+           resData = await res.json();
+        }
+
+        log.removeChild(tempBubble);
+
+        if (resData.success) {
+            const aiReply = resData.answer || resData.reply;
+            appendMsg(aiReply, 'bot');
+
+            // AI TALK BACK
+            if (window.voiceGuide && aiReply) {
+                // Lọc bỏ bớt ký tự đặc biệt hoặc mã nhúng nếu có để AI nói tự nhiên
+                const cleanText = aiReply.replace(/\[ITIN_PROPOSALS:.*?\]/g, '').replace(/https?:\/\/\S+/g, '').trim();
+                window.voiceGuide.speak(cleanText);
+            }
+            if (resData.sessionId) {
+              currentSessionId = resData.sessionId;
+              localStorage.setItem('wander_current_session', currentSessionId);
+            }
+            if (resData.action === 'show_quick_form') {
+                renderQuickPlannerForm(resData.prefill || {});
+            } else if (resData.itineraryCard) {
+                renderItineraryCard(resData.itineraryCard);
+            } else if (resData.proposal) {
+                renderProposalCard(resData.proposal);
+            }
+
+            if (resData.discoveryPlaces && resData.discoveryPlaces.length > 0) {
+                renderDiscoveryCarousel(resData.discoveryPlaces);
+            }
+        } else {
+            appendMsg(resData.answer || 'Xin lỗi, trợ lý đang bận. Vui lòng thử lại!', 'bot');
         }
       } catch(err) {
         if(log.contains(tempBubble)) log.removeChild(tempBubble);
         appendMsg('Lỗi kết nối. Vui lòng thử lại.', 'bot');
       }
     });
+
+    function renderQuickPlannerForm(prefill) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'chat-quick-planner-form';
+        wrapper.innerHTML = `
+            <div class="cqp-header">
+                <span class="cqp-icon">📝</span>
+                <div>
+                    <div class="cqp-title">Lập kế hoạch chi tiết</div>
+                    <div class="cqp-sub">Cung cấp các thông tin cơ bản để bắt đầu</div>
+                </div>
+            </div>
+            <div class="cqp-body">
+                <div class="cqp-field">
+                    <label>📍 Điểm đến mong muốn</label>
+                    <input id="cqpDest" type="text" placeholder="VD: Đà Lạt, Phú Quốc..." value="${prefill.destination || ''}" />
+                </div>
+                <div class="cqp-row">
+                    <div class="cqp-field">
+                        <label>📅 Số ngày</label>
+                        <input id="cqpDays" type="number" min="1" max="30" placeholder="3" value="${prefill.days || 3}" />
+                    </div>
+                    <div class="cqp-field">
+                        <label>📅 Ngày đi</label>
+                        <input id="cqpDate" type="date" />
+                    </div>
+                </div>
+                <div class="cqp-field">
+                    <label>💰 Ngân sách dự kiến</label>
+                    <select id="cqpBudget">
+                        <option value="2">1M - 3M VNĐ (Tiết kiệm)</option>
+                        <option value="5" selected>3M - 7M VNĐ (Tiêu chuẩn)</option>
+                        <option value="10">7M - 15M VNĐ (Thoải mái)</option>
+                        <option value="20">15M+ VNĐ (Cao cấp)</option>
+                    </select>
+                </div>
+                <div class="cqp-field">
+                    <label>👥 Thành viên</label>
+                    <select id="cqpCompanion">
+                        <option value="Solo">Solo (Một mình)</option>
+                        <option value="Cặp đôi">Đi cặp đôi</option>
+                        <option value="Gia đình">Gia đình</option>
+                        <option value="Nhóm bạn" selected>Nhóm bạn</option>
+                    </select>
+                </div>
+                <div class="cqp-field">
+                    <label>💡 Yêu cầu thêm <span class="cqp-optional">(tùy chọn)</span></label>
+                    <textarea id="cqpExtra" placeholder="VD: Tôi muốn leo núi và ăn tối lãng mạn..." rows="2"></textarea>
+                </div>
+            </div>
+            <div class="cqp-actions">
+                <button class="cqp-btn-submit" type="button">Tiếp tục — AI lên lịch ngay →</button>
+                <button class="cqp-btn-skip" type="button">⚡ Bỏ qua — AI tự tạo</button>
+            </div>
+        `;
+
+        wrapper.querySelector('.cqp-btn-submit').onclick = async () => {
+            const dest = wrapper.querySelector('#cqpDest').value.trim();
+            const days = parseInt(wrapper.querySelector('#cqpDays').value) || 3;
+            const budget = parseInt(wrapper.querySelector('#cqpBudget').value) || 5;
+            const companion = wrapper.querySelector('#cqpCompanion').value;
+            const extra = wrapper.querySelector('#cqpExtra').value.trim();
+
+            if (!dest) {
+                wrapper.querySelector('#cqpDest').style.borderColor = '#f43f5e';
+                wrapper.querySelector('#cqpDest').focus();
+                return;
+            }
+
+            const submitBtn = wrapper.querySelector('.cqp-btn-submit');
+            submitBtn.textContent = '⏳ AI đang lên lịch trình...';
+            submitBtn.disabled = true;
+
+            const syntheticMsg = `Lập lịch trình ${days} ngày đi ${dest}, ngân sách ${budget} triệu VNĐ, ${companion}. ${extra}`;
+
+            try {
+                const token = localStorage.getItem('wander_token');
+                const res = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'x-auth-token': token || '' },
+                    body: JSON.stringify({
+                        message: syntheticMsg,
+                        lang: localStorage.getItem('wander_chat_lang') || 'auto',
+                        sessionId: currentSessionId
+                    })
+                });
+                const d = await res.json();
+
+                // Ẩn form và hiện kết quả
+                wrapper.style.opacity = '0.5';
+                wrapper.style.pointerEvents = 'none';
+
+                appendMsg(d.answer || '', 'bot');
+                if (d.sessionId) {
+                    currentSessionId = d.sessionId;
+                    localStorage.setItem('wander_current_session', currentSessionId);
+                }
+                if (d.itineraryCard) {
+                    renderItineraryCard(d.itineraryCard);
+                    wrapper.remove(); // Xóa form sau khi có lịch trình
+                } else {
+                    submitBtn.textContent = 'Tiếp tục — AI lên lịch ngay →';
+                    submitBtn.disabled = false;
+                    wrapper.style.opacity = '1';
+                    wrapper.style.pointerEvents = 'auto';
+                }
+            } catch(e) {
+                submitBtn.textContent = 'Tiếp tục — AI lên lịch ngay →';
+                submitBtn.disabled = false;
+            }
+        };
+
+        // Nút Bỏ qua
+        wrapper.querySelector('.cqp-btn-skip').onclick = async () => {
+            const dest = wrapper.querySelector('#cqpDest').value.trim() || (prefill.destination || 'Việt Nam');
+            const skipBtn = wrapper.querySelector('.cqp-btn-skip');
+            skipBtn.textContent = '⏳ AI đang tự tạo...';
+            skipBtn.disabled = true;
+            wrapper.querySelector('.cqp-btn-submit').disabled = true;
+            const token = localStorage.getItem('wander_token');
+            try {
+                const res = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'x-auth-token': token || '' },
+                    body: JSON.stringify({ message: `Lập lịch trình tùy ý 3 ngày đi ${dest}, ngân sách 5 triệu VNĐ`, lang: localStorage.getItem('wander_chat_lang') || 'auto', sessionId: currentSessionId })
+                });
+                const d = await res.json();
+                appendMsg(d.answer || '', 'bot');
+                if (d.sessionId) { currentSessionId = d.sessionId; localStorage.setItem('wander_current_session', currentSessionId); }
+                if (d.itineraryCard) { renderItineraryCard(d.itineraryCard); wrapper.remove(); }
+                else { skipBtn.textContent = '⚡ Bỏ qua — AI tự tạo'; skipBtn.disabled = false; wrapper.querySelector('.cqp-btn-submit').disabled = false; }
+            } catch(e) { skipBtn.textContent = '⚡ Bỏ qua — AI tự tạo'; skipBtn.disabled = false; }
+        };
+
+        log.appendChild(wrapper);
+        log.scrollTop = log.scrollHeight;
+
+        // Focus vào dest nếu chưa có
+        if (!prefill.destination) {
+            setTimeout(() => wrapper.querySelector('#cqpDest')?.focus(), 200);
+        }
+    }
+
+    function renderProposalCard(proposal) {
+        const card = document.createElement('div');
+        card.className = 'chat-proposal-card-premium';
+        card.innerHTML = `
+            <div class="proposal-header">✨ Đề xuất hành trình</div>
+            <div class="proposal-body">
+                <h4 style="margin:0 0 4px; color:#fff;">${proposal.title || 'Hành trình ' + (proposal.destination || '')}</h4>
+                <p style="margin:0; font-size:0.85rem; opacity:0.8;">${proposal.days} ngày | ${proposal.style || 'Cơ bản'}</p>
+                <div class="proposal-budget" style="margin-top:8px; color:var(--accent); font-weight:700;">💰 ${proposal.budget}</div>
+                <p style="margin:6px 0 0; font-size:0.75rem; color:#94a3b8; font-style:italic;">"${proposal.description || ''}"</p>
+            </div>
+            <button type="button" class="btn-proposal-action" style="margin-top:12px; width:100%; padding:10px; border-radius:10px; background:var(--accent); color:#000; font-weight:800; border:none; cursor:pointer; transition:all 0.2s; box-shadow: 0 4px 12px rgba(16,185,129,0.3);">Xem chi tiết & Chỉnh sửa 🚀</button>
+        `;
+        const btn = card.querySelector('button');
+        btn.onclick = () => {
+            btn.style.transform = 'scale(0.95)';
+            if (window.location.pathname.includes('planner.html') && window.WanderPlanner && window.WanderPlanner.loadDraft) {
+                window.WanderPlanner.loadDraft(proposal);
+                togglePanel(); // Đóng chatbot
+            } else {
+                localStorage.setItem('wander_itinerary_proposal_draft', JSON.stringify(proposal));
+                window.location.href = 'planner.html';
+            }
+        };
+        log.appendChild(card);
+        log.scrollTop = log.scrollHeight;
+    }
+
+    function renderDiscoveryCarousel(places = []) {
+        const container = document.createElement('div');
+        container.style.cssText = `display:flex; gap:12px; margin:12px 0; overflow-x:auto; padding-bottom:10px; scroll-snap-type:x mandatory;`;
+        container.classList.add('no-scrollbar');
+
+        places.forEach(p => {
+            const card = document.createElement('div');
+            card.className = 'chat-discovery-card';
+            card.innerHTML = `
+                <div class="chat-discovery-img" style="background-image:url('${p.image || 'assets/img/hero_nature.jpg'}')"></div>
+                <div class="chat-discovery-info">
+                    <div class="chat-discovery-name">${p.name}</div>
+                    <div class="chat-discovery-loc">📍 ${p.region || 'Việt Nam'}</div>
+                </div>
+            `;
+            card.onclick = () => {
+                if (window.WanderUI && window.WanderUI.showPlaceDetail) {
+                    window.WanderUI.showPlaceDetail(p.id || p.name);
+                } else {
+                    appendMsg(`Cho mình biết thêm về ${p.name} nhé!`, 'user');
+                    document.getElementById('global-chat-input').value = `Thông tin về ${p.name}`;
+                    document.getElementById('global-chat-form').dispatchEvent(new Event('submit'));
+                }
+            };
+            container.appendChild(card);
+        });
+        log.appendChild(container);
+        log.scrollTop = log.scrollHeight;
+    }
+
+    function renderProposalOptions(proposals) {
+        const container = document.createElement('div');
+        container.style.cssText = `
+            display: flex; 
+            flex-direction: row; 
+            gap: 10px; 
+            margin: 10px 0; 
+            overflow-x: auto; 
+            padding: 5px 10px 15px;
+            scroll-snap-type: x mandatory;
+            scrollbar-width: none;
+            -webkit-overflow-scrolling: touch;
+        `;
+        container.classList.add('no-scrollbar');
+        
+        proposals.forEach(p => {
+            const card = document.createElement('div');
+            card.className = 'chat-proposal-card-premium';
+            card.style.cssText = `
+                min-width: 230px; 
+                max-width: 230px; 
+                margin: 0; 
+                flex-shrink: 0; 
+                scroll-snap-align: start;
+                display: flex;
+                flex-direction: column;
+                background: linear-gradient(160deg, #1e293b, #0f172a);
+                border: 1px solid rgba(16, 185, 129, 0.4);
+                border-radius: 14px;
+                padding: 12px;
+                box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+                transition: transform 0.2s;
+            `;
+            card.innerHTML = `
+                <div class="proposal-header" style="font-size:0.6rem; color:var(--accent); font-weight:900; text-transform:uppercase; margin-bottom:6px; letter-spacing:0.5px;">✨ Đề xuất tối ưu</div>
+                <div class="proposal-body" style="flex: 1; min-height: 100px;">
+                    <h4 style="margin:0 0 4px; color:#fff; font-size: 0.9rem; font-weight:800; line-height:1.2;">${p.title}</h4>
+                    <div style="display:flex; gap:6px; margin-bottom:8px;">
+                        <span style="font-size:0.6rem; background:rgba(255,255,255,0.08); padding:2px 8px; border-radius:10px; color:#cbd5e1;">📅 ${p.days} Ngày</span>
+                        <span style="font-size:0.6rem; background:rgba(255,255,255,0.08); padding:2px 8px; border-radius:10px; color:#cbd5e1;">🎒 ${p.style}</span>
+                    </div>
+                    <p style="margin:0; font-size: 0.72rem; color:#94a3b8; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; height: 2.8em;">"${p.description}"</p>
+                    <div style="margin-top:8px; font-size:0.85rem; color:var(--accent); font-weight:800;">💰 ${p.budget}</div>
+                </div>
+                <button type="button" class="btn-proposal-action" style="margin-top:10px; width:100%; padding:9px; border-radius:10px; background:var(--accent); color:#000; font-weight:800; border:none; cursor:pointer; transition:all 0.2s; font-size:0.75rem;">Chọn hành trình này →</button>
+            `;
+            const btn = card.querySelector('button');
+            btn.onclick = () => {
+                if (window.location.pathname.includes('planner.html') && window.WanderPlanner && window.WanderPlanner.loadDraft) {
+                    window.WanderPlanner.loadDraft(p);
+                    togglePanel(); // Đóng chatbot
+                } else {
+                    localStorage.setItem('wander_itinerary_proposal_draft', JSON.stringify(p));
+                    window.location.href = 'planner.html';
+                }
+            };
+            container.appendChild(card);
+        });
+
+        log.appendChild(container);
+        log.scrollTop = log.scrollHeight;
+    }
+
+    function renderItineraryCard(itin) {
+        const card = document.createElement('div');
+        card.className = 'chat-itinerary-card';
+
+        // Stats grid
+        const statsHtml = `
+            <div class="chat-itin-stats">
+                <div class="chat-itin-stat"><div class="chat-itin-stat-label">THỜI GIAN</div><div class="chat-itin-stat-val">${itin.days || ''} Ngày</div></div>
+                <div class="chat-itin-stat"><div class="chat-itin-stat-label">DỰ KIẼN CHI PHÍ</div><div class="chat-itin-stat-val">${itin.estimatedCost || 'Đang ước tính'}</div></div>
+                ${itin.transport ? `<div class="chat-itin-stat"><div class="chat-itin-stat-label">PHƯƠNG TIỆN</div><div class="chat-itin-stat-val">${itin.transport}</div></div>` : ''}
+            </div>
+        `;
+
+        // Days timeline
+        const daysHtml = (itin.itinerary || []).map((day, idx) => {
+            const actsHtml = (day.activities || []).map(act => {
+                // Format time range (08:00 → 08:00 - 10:00 if start/end exist)
+                const timeLabel = act.timeEnd ? `${act.time} - ${act.timeEnd}` : (act.time || '');
+                return `
+                <div class="chat-itin-act-card">
+                    <div class="chat-itin-act-time">${timeLabel}</div>
+                    <div class="chat-itin-act-info">
+                        <div class="chat-itin-act-name">${act.task || act.name || ''}</div>
+                        ${act.location ? `<div class="chat-itin-act-loc">📍 ${act.location}</div>` : ''}
+                        ${act.tip ? `<div class="chat-itin-act-tip">💡 ${act.tip}</div>` : ''}
+                        ${act.cost ? `<span class="chat-itin-act-cost">🟢 ${act.cost}</span>` : ''}
+                    </div>
+                </div>`;
+            }).join('');
+
+            return `
+            <div class="chat-itin-day-block" style="animation-delay:${idx * 0.1}s">
+                <div class="chat-itin-day-sidebar">
+                    <div class="chat-itin-day-num">${day.day}</div>
+                </div>
+                <div class="chat-itin-day-content">
+                    <div class="chat-itin-day-title">Ngày ${day.day}${day.title ? ` (${day.title})` : ''}</div>
+                    ${day.subtitle ? `<div class="chat-itin-day-sub">${day.subtitle}</div>` : ''}
+                    <div class="chat-itin-acts">${actsHtml}</div>
+                </div>
+            </div>`;
+        }).join('');
+
+        card.innerHTML = `
+            <div class="chat-itin-hero">
+                <div class="chat-itin-dest-pill">📍 ${(itin.destination || '').toUpperCase()}</div>
+                <h3 class="chat-itin-hero-title">Hành trình khám phá ${itin.days || ''} ngày</h3>
+                ${itin.tripSummary ? `<p class="chat-itin-hero-sub">${itin.tripSummary}</p>` : ''}
+                ${statsHtml}
+            </div>
+            <div class="chat-itin-timeline">${daysHtml}</div>
+            <div class="chat-itin-actions">
+                <button class="btn-save-itin" type="button">💾 Lưu lịch trình này</button>
+                <button class="btn-export-itin" type="button">📋 Sao chép</button>
+            </div>
+        `;
+
+        // Nút Lưu
+        card.querySelector('.btn-save-itin').onclick = async () => {
+            const token = localStorage.getItem('wander_token');
+            if (!token) { if (window.WanderUI) WanderUI.showToast('Đăng nhập để lưu lịch trình nhé!', 'warning'); return; }
+            const btn = card.querySelector('.btn-save-itin');
+            btn.textContent = '⏳ Đang lưu...';
+            btn.disabled = true;
+            try {
+                const res = await fetch('/api/planner/save', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-auth-token': token }, body: JSON.stringify({ planJson: itin, destination: itin.destination, days: itin.days }) });
+                const d = await res.json();
+                if (d.success) { btn.textContent = '✅ Đã lưu!'; if (window.WanderUI) WanderUI.showToast('Lịch trình đã lưu vào My Trips!', 'success'); }
+                else { btn.textContent = '💾 Lưu lịch trình'; btn.disabled = false; }
+            } catch(e) { btn.textContent = '💾 Lưu lịch trình'; btn.disabled = false; }
+        };
+
+        // Nút Sao chép
+        card.querySelector('.btn-export-itin').onclick = () => {
+            let text = `📍 Lịch trình ${itin.destination} - ${itin.days} ngày\n💰 ${itin.estimatedCost}\n\n`;
+            (itin.itinerary || []).forEach(day => {
+                text += `=== Ngày ${day.day}: ${day.title || ''} ===\n`;
+                (day.activities || []).forEach(act => { text += `  ${act.time || ''} - ${act.task || act.name || ''} (${act.location || ''})\n`; });
+                text += '\n';
+            });
+            navigator.clipboard?.writeText(text).then(() => { if (window.WanderUI) WanderUI.showToast('Đã sao chép lịch trình!', 'success'); });
+        };
+
+        log.appendChild(card);
+        log.scrollTop = log.scrollHeight;
+    }
 
     // Welcome message or resume session
     setTimeout(() => {

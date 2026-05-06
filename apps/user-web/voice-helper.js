@@ -136,18 +136,30 @@ var VoiceGuide = /*#__PURE__*/function () {
   }, {
     key: "start",
     value: function start() {
-      if (!this.isListening && !this.synth.speaking) {
+      // Nếu đang nói (TTS), đừng bật Mic (tránh vọng)
+      if (this.synth.speaking) return;
+      
+      if (!this.isListening) {
         try {
           this.recognition.start();
+          console.log("🎙️ VoiceGuide: Mic started.");
         } catch (e) {
-          console.warn("Nỗ lực khởi động Mic thất bại:", e);
+          // Thường do mic đã chạy ngầm hoặc đang đóng, ignore lỗi InvalidState
+          if (e.name !== 'InvalidStateError') {
+            console.warn("Nỗ lực khởi động Mic thất bại:", e);
+          }
         }
       }
     }
   }, {
     key: "stop",
     value: function stop() {
-      if (this.recognition) this.recognition.stop();
+      if (this.recognition && this.isListening) {
+        try {
+          this.recognition.stop();
+          console.log("🎙️ VoiceGuide: Mic stopped.");
+        } catch (e) {}
+      }
       this.isListening = false;
       this.setStatus('idle');
     }
@@ -194,6 +206,7 @@ var VoiceGuide = /*#__PURE__*/function () {
   }, {
     key: "speak",
     value: function speak(text) {
+      var _this2 = this;
       if (!text) return;
       
       var now = Date.now();

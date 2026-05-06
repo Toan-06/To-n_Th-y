@@ -17,7 +17,8 @@ const KnowledgeSchema = new mongoose.Schema({
   // ♥ Thông tin người hỏi (để xem trong DB)
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   userName: { type: String, default: 'Khách vãng lai' },
-  userEmail: { type: String, default: '' }
+  userEmail: { type: String, default: '' },
+  source: { type: String, default: 'admin', enum: ['admin', 'ai_learned'] }
 });
 
 // Tạo Text Index trên trường question để hỗ trợ Full-Text Search

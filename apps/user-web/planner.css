@@ -1038,27 +1038,197 @@ a {
   padding: 0 0.5rem;
 }
 
+.chip-refresh-btn {
+  padding: 0.5rem 0.9rem;
+  background: transparent;
+  border: 1px dashed rgba(255,255,255,0.2);
+  border-radius: 2rem;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.chip-refresh-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(16,185,129,0.06);
+}
+
 /* -------- Animations -------- */
-@keyframes slideInUp {
-  from {
-    transform: translateY(30px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
+/* -------- Premium Timeline Header V2 (Clean look like Image 2) -------- */
+.timeline-header-premium-v2 {
+  background: linear-gradient(135deg, #f0f7ff 0%, #ffffff 100%);
+  border-radius: 24px;
+  padding: 2.5rem;
+  margin-bottom: 2.5rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(59, 130, 246, 0.08);
+  position: relative;
+  overflow: hidden;
+}
+
+.timeline-header-premium-v2::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; height: 6px;
+  background: linear-gradient(90deg, #3b82f6, #60a5fa);
+  opacity: 0.8;
+}
+
+.destination-badge-v2 {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 14px;
+  background: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+  border-radius: 100px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 1.25rem;
+}
+
+.main-itinerary-title-v2 {
+  font-family: 'Outfit', sans-serif;
+  font-size: 2.2rem;
+  color: #1e293b;
+  margin-bottom: 1rem;
+  font-weight: 700;
+}
+
+.timeline-summary-v2 {
+  color: #64748b;
+  line-height: 1.6;
+  max-width: 800px;
+  font-size: 1rem;
+  margin-bottom: 2rem;
+  border-bottom: 1px solid rgba(0,0,0,0.05);
+  padding-bottom: 2rem;
+}
+
+.itinerary-stats-grid-v2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 1.5rem;
+}
+
+.stat-box-v2 {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stat-label-v2 {
+  font-size: 0.7rem;
+  color: #94a3b8;
+  text-transform: uppercase;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+
+.stat-value-v2 {
+  font-size: 1.25rem;
+  color: #3b82f6;
+  font-weight: 700;
+}
+
+/* Timeline Activity Blocks V2 */
+.itinerary-day-block-v2 {
+  margin-bottom: 3rem;
+  animation: fadeInUp 0.5s ease-out forwards;
+}
+
+.day-header-meta-v2 {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.day-header-meta-v2 h3 {
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.6rem;
+  color: #1e293b;
+  margin: 0;
+}
+
+.day-subtitle-v2 {
+  color: #64748b;
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+
+.premium-activity-card-v2 {
+  background: #fff;
+  border: 1px solid rgba(0,0,0,0.05);
+  border-radius: 18px;
+  padding: 1.5rem;
+  margin-bottom: 1.25rem;
+  display: flex;
+  gap: 1.5rem;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.02);
+}
+
+.premium-activity-card-v2:hover {
+  transform: translateX(8px);
+  border-color: rgba(59, 130, 246, 0.2);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.05);
+}
+
+.activity-time-slot-v2 {
+  min-width: 100px;
+  font-weight: 700;
+  color: #3b82f6;
+  font-size: 1rem;
+  border-right: 2px solid rgba(59, 130, 246, 0.1);
+  padding-right: 1.5rem;
+  display: flex;
+  align-items: center;
+}
+
+.activity-main-info-v2 {
+  flex: 1;
+}
+
+.activity-name-v2 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 0.4rem;
+}
+
+.activity-location-tag-v2 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #64748b;
+  font-size: 0.85rem;
+  margin-bottom: 0.75rem;
+}
+
+.activity-desc-v2 {
+  color: #64748b;
+  line-height: 1.5;
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.activity-budget-pill-v2 {
+  display: inline-flex;
+  padding: 4px 10px;
+  background: #f0fdf4;
+  color: #15803d;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 700;
 }
 
 @keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes fadeIn {
