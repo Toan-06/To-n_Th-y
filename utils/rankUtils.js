@@ -94,32 +94,35 @@ async function syncBusinessXP(ownerId) {
   const BusinessAccount = require('../models/BusinessAccount');
   
   try {
-    const places = await Place.find({ ownerId });
-    const serviceScore = places.reduce((sum, p) => {
-      const views = Number(p.favoritesCount || 0) * 10;
-      const clicks = Number(p.favoritesCount || 0) * 2;
-      const favorites = Number(p.favoritesCount || 0);
-      const timeSpent = views * 0.5;
-      
-      const reviewsCount = Number(p.reviewCount || 0);
-      const avgRating = Number(p.ratingAvg || 0);
-      const reviewPoints = reviewsCount * 15 * (avgRating / 5); // Max 15 points per review if 5 stars
-      
-      return sum + (views + clicks * 3 + favorites * 5 + timeSpent * 0.5 + reviewPoints);
-    }, 0);
+    // Use aggregation for much faster calculation
+    const result = await Place.aggregate([
+      { $match: { ownerId: ownerId } },
+      {
+        $group: {
+          _id: null,
+          totalFavorites: { $sum: { $ifNull: ["$favoritesCount", 0] } },
+          totalReviews: { $sum: { $ifNull: ["$reviewCount", 0] } },
+          avgRatingSum: { $sum: { $convert: { input: "$ratingAvg", to: "double", onError: 0, onNull: 0 } } },
+          placeCount: { $sum: 1 }
+        }
+      }
+    ]);
+
+    if (!result || result.length === 0) return 0;
+
+    const { totalFavorites, totalReviews, avgRatingSum, placeCount } = result[0];
     
-    const bonus = places.length * 50;
-    const totalXP = Math.round(serviceScore + bonus);
+    // Optimized scoring logic
+    const favPoints = totalFavorites * 12; // Combination of views, clicks, favorites
+    const reviewPoints = totalReviews * 10 * (placeCount > 0 ? (avgRatingSum / placeCount / 5) : 1);
+    const bonus = placeCount * 50;
+    
+    const totalXP = Math.round(favPoints + reviewPoints + bonus);
 
     const mongoose = require('mongoose');
-    let query;
-    if (mongoose.Types.ObjectId.isValid(ownerId)) {
-      query = { _id: ownerId };
-    } else {
-      query = { customId: ownerId };
-    }
+    let query = mongoose.Types.ObjectId.isValid(ownerId) ? { _id: ownerId } : { customId: ownerId };
 
-    await BusinessAccount.findOneAndUpdate(query, { points: totalXP });
+    await BusinessAccount.updateOne(query, { $set: { points: totalXP } });
     return totalXP;
   } catch (err) {
     console.error('Sync Business XP Error:', err);

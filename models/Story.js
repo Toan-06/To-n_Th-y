@@ -11,7 +11,19 @@ const storySchema = new mongoose.Schema({
     url: String,
     type: { type: String, enum: ['image', 'video'], default: 'image' }
   }],
+  music: {
+    name: String,
+    author: String,
+    url: String
+  },
+  textOverlay: {
+    content: String,
+    color: String,
+    top: String,
+    left: String
+  },
   viewers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  likes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   expiresAt: { type: Date, default: () => new Date(Date.now() + 24 * 60 * 60 * 1000), index: { expires: 0 } }, // Auto-delete after 24h
   createdAt: { type: Date, default: Date.now }
 });

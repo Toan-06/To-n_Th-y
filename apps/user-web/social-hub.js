@@ -7,244 +7,674 @@ const SocialHub = {
     chatPollingInterval: null,
     currentStoryIndex: 0,
     storyProgressInterval: null,
+    isStoryMuted: false,
+    socket: null,
 
-    init: async function() {
+    init: function () {
         console.log("📖 Social Hub v3 Initializing...");
         const token = localStorage.getItem('wander_token');
         if (!token) {
             this.showGuestLanding();
+            if (window.WanderUI && window.WanderUI.finishTopLoader) window.WanderUI.finishTopLoader();
             return;
         }
-        await this.loadUserProfile();
-        await this.fetchFeed();
-        await this.fetchStories();
+
+        // Render placeholders/skeletons immediately
+        this.renderSkeletons();
+
+        // Parallelized fetching for instant results
+        Promise.all([
+            this.loadUserProfile(),
+            this.fetchFeed(),
+            this.fetchStories()
+        ]).then(() => {
+            this.fetchPendingFriends();
+            this.loadFriendSuggestions();
+            this.loadFriendsList();
+            this.loadConversations();
+            this.renderTrending();
+            if (window.WanderUI && window.WanderUI.finishTopLoader) window.WanderUI.finishTopLoader();
+        }).catch(err => {
+            console.error("Social hub init error:", err);
+            if (window.WanderUI && window.WanderUI.finishTopLoader) window.WanderUI.finishTopLoader();
+        });
+
         this.setupEventListeners();
-        this.fetchPendingFriends();
-        this.loadFriendSuggestions();
-        this.loadFriendsList();
-        this.loadConversations();
-        this.renderTrending();
         this.startStoriesAutoRefresh();
-        
-        // Handle URL parameters for direct chat/tab linking
+
+        // Handle URL parameters
         const params = new URLSearchParams(window.location.search);
         const tab = params.get('tab');
         if (tab) {
             this.switchTab(tab);
-            // Clean up URL
             window.history.replaceState({}, document.title, "social-hub.html");
         }
-        const chatId = params.get('chat');
-        if (chatId) {
-            // Need to fetch user details to open chat
-            try {
-                const res = await fetch(`/api/social/users/${chatId}`, { headers: { 'x-auth-token': token } });
-                const data = await res.json();
-                if (data.success) {
-                    this.openChat(data.data._id, data.data.displayName || data.data.name, data.data.avatar);
+
+        this.initSocket();
+    },
+
+    initSocket: function () {
+        const token = localStorage.getItem('wander_token');
+        if (!token || typeof io === 'undefined') return;
+
+        console.log("🔌 Connecting to real-time server...");
+        this.socket = io({
+            auth: { token }
+        });
+
+        this.socket.on('connect', () => {
+            console.log("✅ Real-time connected!");
+        });
+
+        this.socket.on('receive_message', (msg) => {
+            console.log("📨 New real-time message:", msg);
+            this.handleIncomingMessage(msg);
+        });
+
+        this.socket.on('notification', (notif) => {
+            console.log("🔔 Real-time notification:", notif);
+            if (window.WanderUI) {
+                WanderUI.showToast(notif.message, 'info');
+            }
+            // Refresh counts or list if needed
+            if (notif.type === 'friend_request') this.fetchPendingFriends();
+        });
+
+        this.socket.on('connect_error', (err) => {
+            console.warn("🔌 Socket connection error:", err.message);
+        });
+    },
+
+    handleIncomingMessage: function (msg) {
+        // 1. If chat drawer is open with THIS user, append message
+        if (this.chatTarget && String(this.chatTarget.userId) === String(msg.senderId)) {
+            const body = document.getElementById('chat-messages');
+            if (body) {
+                const emptyMsg = body.querySelector('.chat-empty, .chat-loading');
+                if (emptyMsg) emptyMsg.remove();
+
+                const msgDiv = document.createElement('div');
+                msgDiv.className = 'chat-msg received';
+                msgDiv.innerHTML = `<p>${msg.text}</p><span class="msg-time">Vừa xong</span>`;
+                body.appendChild(msgDiv);
+                body.scrollTop = body.scrollHeight;
+
+                // Play sound or notification if tab is not active
+                if (document.hidden) {
+                    this.playMessageSound();
                 }
-            } catch(e) {}
+            }
+        } else {
+            // 2. Otherwise, show toast and refresh conversation list
+            if (window.WanderUI) {
+                WanderUI.showToast(`Tin nhắn mới từ ${msg.senderName}: ${msg.text.substring(0, 30)}...`, 'success');
+            }
+            this.loadConversations();
+            this.playMessageSound();
         }
     },
 
-    loadUserProfile: async function() {
+    playMessageSound: function() {
         try {
+            const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3');
+            audio.volume = 0.5;
+            audio.play();
+        } catch(e) {}
+    },
+
+    renderSkeletons: function () {
+        const feedContainer = document.getElementById('feed-container');
+        if (feedContainer) {
+            feedContainer.innerHTML = `
+                <div class="skeleton-post" style="padding:20px;margin-bottom:20px;background:rgba(255,255,255,0.05);border-radius:24px;">
+                    <div style="display:flex;gap:12px;margin-bottom:12px;">
+                        <div class="loading-shimmer" style="width:40px;height:40px;border-radius:50%;"></div>
+                        <div style="flex:1;"><div class="loading-shimmer" style="height:14px;width:120px;margin-bottom:8px;"></div><div class="loading-shimmer" style="height:10px;width:80px;"></div></div>
+                    </div>
+                    <div class="loading-shimmer" style="height:20px;margin-bottom:12px;width:90%;"></div>
+                    <div class="loading-shimmer" style="height:200px;border-radius:12px;"></div>
+                </div>
+            `;
+        }
+        const storyContainer = document.getElementById('stories-container');
+        if (storyContainer) {
+            storyContainer.innerHTML = Array(5).fill(0).map(() => `
+                <div class="reel-card skeleton" style="background:rgba(255,255,255,0.05);"><div class="loading-shimmer" style="width:100%;height:100%;"></div></div>
+            `).join('');
+        }
+    },
+
+    loadUserProfile: async function () {
+        try {
+            // First, check cache for instant render
+            const cached = localStorage.getItem('wander_user');
+            if (cached) {
+                this.user = JSON.parse(cached);
+                this.updateUserUI();
+            }
+
             const res = await fetch('/api/auth/user/me', { headers: { 'x-auth-token': localStorage.getItem('wander_token') } });
             const data = await res.json();
             if (data.success) {
-                this.user = data.user;
-                const nameEl = document.getElementById('mini-name');
-                const rankEl = document.getElementById('mini-rank');
-                if (nameEl) nameEl.textContent = this.user.displayName || this.user.name;
-                if (rankEl) rankEl.textContent = `Hạng ${this.user.rank || 'Đồng'} ${this.user.rankTier || 'I'}`;
-                if (this.user.avatar) document.querySelectorAll('#mini-avatar, #post-avatar').forEach(img => img.src = this.user.avatar);
-                // Update stats
-                const postCount = document.getElementById('stat-posts');
-                const friendCount = document.getElementById('stat-friends');
-                if (postCount) { try { const r = await fetch(`/api/social/posts/user/${this.user._id}`, { headers: { 'x-auth-token': localStorage.getItem('wander_token') } }); const d = await r.json(); if (d.success) postCount.textContent = d.data.length; } catch(e){} }
-                if (friendCount) { try { const r = await fetch('/api/social/friends', { headers: { 'x-auth-token': localStorage.getItem('wander_token') } }); const d = await r.json(); if (d.success) friendCount.textContent = d.data.length; } catch(e){} }
+                // Normalize user object to ensure both _id and id exist for compatibility
+                const user = data.user;
+                if (user) {
+                    if (!user._id && user.id) user._id = user.id;
+                    if (!user.id && user._id) user.id = user._id;
+                }
+                this.user = user;
+                localStorage.setItem('wander_user', JSON.stringify(this.user)); // Sync cache
+                this.updateUserUI();
+
+                // Fetch stats in background
+                this.loadUserStats();
             }
         } catch (err) { console.error("Lỗi tải hồ sơ:", err); }
     },
 
+    updateUserUI: function () {
+        if (!this.user) return;
+        const nameEl = document.getElementById('mini-name');
+        const rankEl = document.getElementById('mini-rank');
+        if (nameEl) nameEl.textContent = this.user.displayName || this.user.name;
+        if (rankEl) rankEl.textContent = `Hạng ${this.user.rank || 'Đồng'} ${this.user.rankTier || 'I'}`;
+        if (this.user.avatar) document.querySelectorAll('#mini-avatar, #post-avatar').forEach(img => img.src = this.user.avatar);
+    },
+
+    loadUserStats: async function () {
+        if (!this.user) return;
+        const userId = this.user._id || this.user.id;
+        if (!userId) return;
+
+        // Parallel fetch for stats without blocking
+        Promise.all([
+            fetch(`/api/social/posts/user/${userId}`, { headers: { 'x-auth-token': localStorage.getItem('wander_token') } }).then(r => r.json()),
+            fetch('/api/social/friends', { headers: { 'x-auth-token': localStorage.getItem('wander_token') } }).then(r => r.json())
+        ]).then(([posts, friends]) => {
+            const postCount = document.getElementById('stat-posts');
+            const friendCount = document.getElementById('stat-friends');
+            if (postCount && posts.success) postCount.textContent = posts.data.length;
+            if (friendCount && friends.success) friendCount.textContent = friends.data.length;
+        }).catch(() => { });
+    },
+
     // ========== STORIES SYSTEM ==========
-    fetchStories: async function() {
+    fetchStories: async function () {
         try {
-            const res = await fetch('/api/social/stories', { 
-                headers: { 'x-auth-token': localStorage.getItem('wander_token') } 
+            const res = await fetch('/api/social/stories', {
+                headers: { 'x-auth-token': localStorage.getItem('wander_token') }
             });
             const data = await res.json();
             if (data.success) {
                 this.stories = data.data;
                 this.renderStories();
             }
-        } catch (err) { 
+        } catch (err) {
             console.error("Lỗi tải stories:", err);
             this.renderStories(); // Render với stories rỗng
         }
     },
 
-    renderStories: function() {
+    renderStories: function () {
         const container = document.getElementById('stories-container');
         if (!container) return;
-        
-        // Lấy danh sách stories đã xem từ localStorage
         const viewedStories = JSON.parse(localStorage.getItem('wander_viewed_stories') || '[]');
-        
+
+        // Card Tạo tin
         let storiesHtml = `
-            <div class="story-card create-story" onclick="SocialHub.openCreateStoryModal()">
-                <div class="story-thumb" style="background-image: url('${this.user?.avatar || 'assets/default-avatar.svg'}')"></div>
-                <div class="story-add">+</div>
-                <span>Tạo tin</span>
+            <div class="reel-card create-story" onclick="SocialHub.openCreateStoryModal()">
+                <div class="reel-thumb" style="background-image: url('${this.user?.avatar || 'assets/default-avatar.svg'}')"></div>
+                <div class="reel-create-overlay"><div class="reel-add-btn"><i class="fas fa-plus"></i></div></div>
+                <div class="reel-user-info"><img src="${this.user?.avatar || 'assets/default-avatar.svg'}" class="reel-avatar"><span>Tạo tin</span></div>
             </div>
         `;
-        
-        // Group stories theo user
-        const userStories = {};
+
+        // Group stories theo user - dùng userId string làm key
+        const userMap = {};
         this.stories.forEach(story => {
-            if (!userStories[story.userId]) {
-                userStories[story.userId] = {
-                    user: story.user,
+            // userId có thể là string (raw) hoặc object (populated)
+            const uid = story.user?._id ? String(story.user._id)
+                : (story.userId?._id ? String(story.userId._id) : String(story.userId));
+            if (!userMap[uid]) {
+                userMap[uid] = {
+                    uid,
+                    user: story.user || story.userId,
                     stories: [],
                     hasUnviewed: false
                 };
             }
-            userStories[story.userId].stories.push(story);
-            if (!viewedStories.includes(story._id)) {
-                userStories[story.userId].hasUnviewed = true;
-            }
+            userMap[uid].stories.push(story);
+            if (!viewedStories.includes(story._id)) userMap[uid].hasUnviewed = true;
         });
-        
-        // Render mỗi user chỉ 1 story card (hiển thị story mới nhất)
-        Object.values(userStories).forEach(group => {
-            const latestStory = group.stories[group.stories.length - 1];
-            const isViewed = viewedStories.includes(latestStory._id);
-            const ringClass = isViewed ? 'story-viewed' : 'story-unviewed';
-            
+
+        this.storyUserIds = Object.keys(userMap);
+
+        Object.values(userMap).forEach(group => {
+            const latest = group.stories[group.stories.length - 1];
+            const isViewed = !group.hasUnviewed;
+            const isVideo = latest.media?.[0]?.type === 'video';
+            // Ưu tiên media thumbnail, fallback avatar
+            const thumb = latest.media?.[0]?.url || group.user?.avatar || 'assets/default-avatar.svg';
+            const musicBadge = latest.music ? `<div class="reel-music-badge"><i class="fas fa-music"></i> ${latest.music.name}</div>` : '';
+            const ringClass = isViewed ? '' : 'reel-unviewed';
+            const displayName = group.user?.displayName || group.user?.name || 'Người dùng';
+            const avatar = group.user?.avatar || 'assets/default-avatar.svg';
             storiesHtml += `
-                <div class="story-card ${ringClass}" onclick="SocialHub.openStoryViewer('${group.user._id}')">
-                    <div class="story-thumb" style="background-image: url('${latestStory.media?.[0]?.url || group.user?.avatar || 'assets/default-avatar.svg'}')"></div>
-                    <span>${group.user?.displayName || group.user?.name || 'Người dùng'}</span>
+                <div class="reel-card ${ringClass}" onclick="SocialHub.openStoryViewer('${group.uid}')">
+                    <div class="reel-thumb" style="background-image: url('${thumb}')">
+                        ${isVideo ? '<div class="reel-video-badge"><i class="fas fa-play"></i></div>' : ''}
+                    </div>
+                    ${musicBadge}
+                    <div class="reel-user-info">
+                        <img src="${avatar}" class="reel-avatar">
+                        <span>${displayName}</span>
+                    </div>
                 </div>
             `;
         });
-        
         container.innerHTML = storiesHtml;
     },
 
-    openStoryViewer: function(userId) {
-        // Tìm tất cả stories của user này
-        const userStories = this.stories.filter(s => s.userId === userId);
-        if (userStories.length === 0) return;
-        
+    openStoryViewer: function (userId, startStoryId = null) {
+        const userIdStr = String(userId);
+        const userStories = this.stories.filter(s => {
+            const sid = s.user?._id ? String(s.user._id)
+                : (s.userId?._id ? String(s.userId._id) : String(s.userId));
+            return sid === userIdStr;
+        });
+
+        if (userStories.length === 0) {
+            if (window.WanderUI) WanderUI.showToast('Không tìm thấy thước phim', 'error');
+            return;
+        }
+
         this.currentStoryUserId = userId;
-        this.currentStoryIndex = 0;
+        // Tìm index của story cụ thể nếu có
+        let startIndex = 0;
+        if (startStoryId) {
+            const foundIndex = userStories.findIndex(s => String(s._id) === String(startStoryId));
+            if (foundIndex > -1) startIndex = foundIndex;
+        }
+
+        this.currentStoryIndex = startIndex;
         this.viewedStoriesList = userStories;
-        
-        // Tạo story viewer overlay
+        this.storyPaused = false;
+
         const overlay = document.createElement('div');
         overlay.id = 'story-viewer-overlay';
         overlay.className = 'story-viewer-overlay';
         overlay.innerHTML = `
-            <div class="story-viewer">
+            <div class="story-viewer" id="story-viewer-main">
                 <div class="story-progress-bars">
                     ${userStories.map((_, i) => `<div class="story-progress-bar ${i === 0 ? 'active' : ''}" data-index="${i}"><div class="progress-fill"></div></div>`).join('')}
                 </div>
                 <div class="story-header">
                     <div class="story-user-info">
                         <img src="${userStories[0].user?.avatar || 'assets/default-avatar.svg'}" class="story-user-avatar">
-                        <span class="story-user-name">${userStories[0].user?.displayName || userStories[0].user?.name}</span>
-                        <span class="story-time">${this.formatTime(userStories[0].createdAt)}</span>
+                        <div class="story-user-text">
+                            <div class="story-user-text-top">
+                                <span class="story-user-name">${userStories[0].user?.displayName || userStories[0].user?.name}</span>
+                                <span class="story-time">${this.formatTime(userStories[0].createdAt)}</span>
+                            </div>
+                            <div class="story-music-info" id="story-music-info" style="display:none;"></div>
+                        </div>
                     </div>
-                    <button class="story-close" onclick="SocialHub.closeStoryViewer()">×</button>
+                    <div class="story-header-actions">
+                        <button class="sv-btn" id="story-mute-btn" onclick="SocialHub.toggleStoryMute()"><i class="fas fa-volume-up"></i></button>
+                        <button class="sv-btn" id="story-pause-btn" onclick="SocialHub.toggleStoryPause()"><i class="fas fa-pause"></i></button>
+                        <button class="sv-btn" onclick="SocialHub.closeStoryViewer()"><i class="fas fa-times"></i></button>
+                    </div>
                 </div>
                 <div class="story-content" id="story-content"></div>
                 <div class="story-nav story-prev" onclick="SocialHub.prevStory()"></div>
                 <div class="story-nav story-next" onclick="SocialHub.nextStory()"></div>
+                <!-- Chỉ giữ input gửi tin nhắn, không có nút like/share thừa -->
+                <div class="story-bottom-bar">
+                    <div class="story-reply-container">
+                        <div class="story-reply-input">
+                            <input type="text" placeholder="Gửi tin nhắn..." id="story-reply-field">
+                            <button onclick="SocialHub.sendStoryReply()"><i class="fas fa-paper-plane"></i></button>
+                        </div>
+                        <div class="story-bottom-actions" id="story-viewer-bottom-actions">
+                            <!-- Nút Like, Share... sẽ được render động -->
+                        </div>
+                    </div>
+                </div>
             </div>
         `;
         document.body.appendChild(overlay);
         document.body.style.overflow = 'hidden';
-        
-        // Show first story
-        this.showStory(0);
-        
-        // Start progress
+        this.showStory(startIndex);
         this.startStoryProgress();
-        
-        // Đánh dấu đã xem
-        this.markStoryAsViewed(userStories[0]._id);
+        this.markStoryAsViewed(userStories[startIndex]._id);
     },
 
-    showStory: function(index) {
+    toggleStoryPause: function () {
+        this.storyPaused = !this.storyPaused;
+        const btn = document.getElementById('story-pause-btn');
+        if (btn) btn.innerHTML = this.storyPaused ? '<i class="fas fa-play"></i>' : '<i class="fas fa-pause"></i>';
+        const video = document.querySelector('#story-content video');
+        if (video) this.storyPaused ? video.pause() : video.play();
+    },
+
+    toggleStoryMute: function () {
+        this.isStoryMuted = !this.isStoryMuted;
+
+        const video = document.getElementById('story-video-player');
+        if (video) {
+            video.muted = this.isStoryMuted;
+        }
+
+        if (this._storyMusicAudio) {
+            this._storyMusicAudio.muted = this.isStoryMuted;
+        }
+
+        const btn = document.getElementById('story-mute-btn');
+        if (btn) {
+            btn.innerHTML = this.isStoryMuted ? '<i class="fas fa-volume-mute"></i>' : '<i class="fas fa-volume-up"></i>';
+        }
+    },
+
+    sendStoryReply: function () {
+        const input = document.getElementById('story-reply-field');
+        if (input?.value?.trim()) {
+            if (window.WanderUI) WanderUI.showToast('Đã gửi tin nhắn!', 'success');
+            input.value = '';
+        }
+    },
+
+    shareStory: function () {
+        if (window.WanderUI) WanderUI.showToast('Đã sao chép liên kết thước phim!', 'success');
+    },
+
+    showStory: function (index) {
         const story = this.viewedStoriesList[index];
         if (!story) return;
-        
+
         const content = document.getElementById('story-content');
         const media = story.media?.[0];
-        
+
+        let mediaHtml = '';
         if (media?.type === 'video') {
-            content.innerHTML = `<video src="${media.url}" autoplay class="story-media"></video>`;
+            // Video: try to autoplay, with an ID so we can force play it
+            mediaHtml = `<video src="${media.url}" id="story-video-player" autoplay loop playsinline class="story-media" onclick="SocialHub.toggleStoryPause()"></video>`;
+        } else if (media?.url) {
+            // Ảnh thật từ upload
+            mediaHtml = `<img src="${media.url}" class="story-media" alt="story">`;
         } else {
-            content.innerHTML = `<img src="${media?.url || story.user?.avatar}" class="story-media">`;
+            // Fallback: avatar người dùng
+            const av = story.user?.avatar || story.userId?.avatar || 'assets/default-avatar.svg';
+            mediaHtml = `<img src="${av}" class="story-media" alt="story">`;
         }
-        
-        // Update progress bars
+
+        // Text overlay
+        if (story.textOverlay) {
+            if (typeof story.textOverlay === 'object' && story.textOverlay.content) {
+                const top = story.textOverlay.top || '50%';
+                const left = story.textOverlay.left || '50%';
+                const color = story.textOverlay.color || '#fff';
+                mediaHtml += `<div class="story-viewer-text" style="top:${top};left:${left};color:${color};">${story.textOverlay.content}</div>`;
+            } else if (typeof story.textOverlay === 'string') {
+                mediaHtml += `<div class="story-viewer-text">${story.textOverlay}</div>`;
+            }
+        }
+
+        // Cập nhật các nút ở thanh dưới (bottom actions)
+        const bottomActions = document.getElementById('story-viewer-bottom-actions');
+        if (bottomActions) {
+            const liked = (this._likedStories || []).includes(String(story._id));
+            bottomActions.innerHTML = `
+                <button class="sv-btn ${liked ? 'liked' : ''}" id="story-like-btn" onclick="SocialHub.toggleLikeStory('${story._id}', this)">
+                    <i class="${liked ? 'fas' : 'far'} fa-heart"></i>
+                    <span class="action-count">${story.likeCount || 0}</span>
+                </button>
+                <button class="sv-btn" onclick="SocialHub.openStoryComment()">
+                    <i class="fas fa-comment-dots"></i>
+                </button>
+                <button class="sv-btn" onclick="SocialHub.shareStory('${story._id}')">
+                    <i class="fas fa-share"></i>
+                </button>
+            `;
+        }
+
+        // Cập nhật nút mute dựa theo trạng thái
+        const muteBtn = document.getElementById('story-mute-btn');
+        if (muteBtn) {
+            muteBtn.innerHTML = this.isStoryMuted ? '<i class="fas fa-volume-mute"></i>' : '<i class="fas fa-volume-up"></i>';
+        }
+
+        // Music overlay (inline with user info)
+        const musicInfoEl = document.getElementById('story-music-info');
+        if (story.music?.name) {
+            if (musicInfoEl) {
+                musicInfoEl.style.display = 'flex';
+                musicInfoEl.innerHTML = `<i class="fas fa-music"></i><marquee scrollamount="3">${story.music.name} — ${story.music.author}</marquee>`;
+            }
+            // Phát nhạc nếu có URL
+            if (story.music.url) {
+                if (this._storyMusicAudio) this._storyMusicAudio.pause();
+                this._storyMusicAudio = new Audio(story.music.url);
+                this._storyMusicAudio.volume = 0.4;
+                this._storyMusicAudio.muted = this.isStoryMuted;
+                this._storyMusicAudio.play().catch(() => { });
+            }
+        } else {
+            if (musicInfoEl) musicInfoEl.style.display = 'none';
+            if (this._storyMusicAudio) { this._storyMusicAudio.pause(); this._storyMusicAudio = null; }
+        }
+
+        content.innerHTML = mediaHtml;
+
+        // Force play video if present (fixes "không chạy" issue)
+        const videoEl = document.getElementById('story-video-player');
+        if (videoEl) {
+            videoEl.muted = this.isStoryMuted;
+
+            videoEl.play().catch(e => {
+                console.warn('Video autoplay blocked, attempting muted autoplay...', e);
+                this.isStoryMuted = true; // Auto update global state if blocked
+                videoEl.muted = true;
+                if (muteBtn) muteBtn.innerHTML = '<i class="fas fa-volume-mute"></i>';
+                if (this._storyMusicAudio) this._storyMusicAudio.muted = true;
+
+                videoEl.play().catch(err => console.error('Video totally blocked', err));
+            });
+        }
+
+        // Cập nhật progress bars
         document.querySelectorAll('.story-progress-bar').forEach((bar, i) => {
             bar.classList.toggle('active', i === index);
             bar.classList.toggle('completed', i < index);
         });
-        
-        // Update time
-        document.querySelector('.story-time').textContent = this.formatTime(story.createdAt);
+
+        // Cập nhật thông tin header
+        const storyUser = story.user || story.userId || {};
+        const timeEl = document.querySelector('.story-time');
+        if (timeEl) timeEl.textContent = this.formatTime(story.createdAt);
+        const nameEl = document.querySelector('.story-user-name');
+        if (nameEl) nameEl.textContent = storyUser.displayName || storyUser.name || 'Người dùng';
+        const avatarEl = document.querySelector('.story-user-avatar');
+        if (avatarEl) avatarEl.src = storyUser.avatar || 'assets/default-avatar.svg';
     },
 
-    startStoryProgress: function() {
+    toggleLikeStory: function (storyId) {
+        if (window.WanderUI) WanderUI.showToast('Đã thả tim thước phim này! ❤️', 'success');
+        event.currentTarget.querySelector('i').style.color = '#ff3b30';
+    },
+
+    startStoryProgress: function () {
         if (this.storyProgressInterval) clearInterval(this.storyProgressInterval);
-        
+        this.storyPaused = false;
+
         let progress = 0;
         const duration = 5000; // 5 seconds per story
         const interval = 50; // Update every 50ms
         const step = 100 / (duration / interval);
-        
+
         this.storyProgressInterval = setInterval(() => {
+            if (this.storyPaused) return;
             progress += step;
             const activeBar = document.querySelector('.story-progress-bar.active .progress-fill');
             if (activeBar) activeBar.style.width = `${Math.min(progress, 100)}%`;
-            
-            if (progress >= 100) {
-                this.nextStory();
-            }
+            if (progress >= 100) this.nextStory();
         }, interval);
     },
 
-    nextStory: function() {
+    nextStory: function () {
         if (this.currentStoryIndex < this.viewedStoriesList.length - 1) {
             this.currentStoryIndex++;
             this.showStory(this.currentStoryIndex);
             this.markStoryAsViewed(this.viewedStoriesList[this.currentStoryIndex]._id);
             this.startStoryProgress();
         } else {
+            if (this.storyUserIds) {
+                const currentUserIdx = this.storyUserIds.indexOf(String(this.currentStoryUserId));
+                if (currentUserIdx !== -1 && currentUserIdx < this.storyUserIds.length - 1) {
+                    const nextUserId = this.storyUserIds[currentUserIdx + 1];
+                    this.closeStoryViewer();
+                    setTimeout(() => this.openStoryViewer(nextUserId), 10);
+                    return;
+                }
+            }
             this.closeStoryViewer();
         }
     },
 
-    prevStory: function() {
+    prevStory: function () {
         if (this.currentStoryIndex > 0) {
             this.currentStoryIndex--;
             this.showStory(this.currentStoryIndex);
             this.startStoryProgress();
+        } else {
+            if (this.storyUserIds) {
+                const currentUserIdx = this.storyUserIds.indexOf(String(this.currentStoryUserId));
+                if (currentUserIdx > 0) {
+                    const prevUserId = this.storyUserIds[currentUserIdx - 1];
+                    this.closeStoryViewer();
+                    setTimeout(() => this.openStoryViewer(prevUserId), 10);
+                    return;
+                }
+            }
         }
     },
 
-    closeStoryViewer: function() {
+    closeStoryViewer: function () {
         if (this.storyProgressInterval) clearInterval(this.storyProgressInterval);
+        if (this._storyMusicAudio) { this._storyMusicAudio.pause(); this._storyMusicAudio = null; }
         const overlay = document.getElementById('story-viewer-overlay');
         if (overlay) overlay.remove();
         document.body.style.overflow = '';
     },
 
-    markStoryAsViewed: function(storyId) {
+    // === STORY ACTIONS ===
+    _likedStories: JSON.parse(localStorage.getItem('wander_liked_stories') || '[]'),
+
+    toggleLikeStory: async function (storyId, btnEl) {
+        if (!storyId) return;
+        const btn = btnEl || document.getElementById('story-like-btn');
+        const icon = btn?.querySelector('i');
+        const countEl = btn?.querySelector('.action-count');
+        const idStr = String(storyId);
+
+        // UI Update (Optimistic)
+        const alreadyLiked = this._likedStories.includes(idStr);
+        if (alreadyLiked) {
+            this._likedStories = this._likedStories.filter(id => id !== idStr);
+            if (icon) icon.className = 'far fa-heart';
+            if (btn) btn.classList.remove('liked');
+            if (countEl) countEl.textContent = Math.max(0, parseInt(countEl.textContent || 0) - 1);
+        } else {
+            this._likedStories.push(idStr);
+            if (icon) icon.className = 'fas fa-heart';
+            if (btn) btn.classList.add('liked');
+            if (btn) {
+                btn.style.transform = 'scale(1.3)';
+                setTimeout(() => { btn.style.transform = ''; }, 300);
+            }
+            if (countEl) countEl.textContent = parseInt(countEl.textContent || 0) + 1;
+        }
+        localStorage.setItem('wander_liked_stories', JSON.stringify(this._likedStories));
+
+        // API Call
+        try {
+            const res = await fetch(`/api/social/stories/${storyId}/like`, {
+                method: 'POST',
+                headers: { 'x-auth-token': localStorage.getItem('wander_token') }
+            });
+            const data = await res.json();
+            if (data.success && countEl) {
+                countEl.textContent = data.count;
+            }
+        } catch (e) {
+            console.error("Lỗi like story:", e);
+        }
+    },
+
+    openStoryComment: function () {
+        // Focus vào ô nhập phía dưới
+        const input = document.getElementById('story-reply-field');
+        if (input) {
+            input.focus();
+            input.placeholder = 'Viết bình luận...';
+            this.toggleStoryPause(); // Tạm dừng story để bình luận
+        }
+    },
+
+    sendStoryReply: async function () {
+        const input = document.getElementById('story-reply-field');
+        const text = input?.value?.trim();
+        if (!text) return;
+
+        const story = this.viewedStoriesList?.[this.currentStoryIndex];
+        if (!story) return;
+
+        const storyUser = story.user || {};
+        const targetUserId = storyUser._id;
+
+        // Gửi tin nhắn tới chủ story
+        if (targetUserId && String(targetUserId) !== String(this.user?._id)) {
+            try {
+                await fetch('/api/social/messages', {
+                    method: 'POST',
+                    headers: {
+                        'x-auth-token': localStorage.getItem('wander_token'),
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ recipientId: targetUserId, content: `[Story] ${text}` })
+                });
+                if (window.WanderUI) WanderUI.showToast('Đã gửi tin nhắn!', 'success');
+            } catch (e) {
+                if (window.WanderUI) WanderUI.showToast('Đã gửi!', 'success');
+            }
+        } else {
+            if (window.WanderUI) WanderUI.showToast('Đã gửi!', 'success');
+        }
+        input.value = '';
+        input.placeholder = 'Gửi tin nhắn...';
+        // Tiếp tục phát nếu đang pause
+        if (this.storyPaused) this.toggleStoryPause();
+    },
+
+    shareStory: function (storyId) {
+        const url = `${window.location.origin}/social-hub.html?story=${storyId || ''}`;
+        if (navigator.share) {
+            navigator.share({ title: 'WanderViệt Thước Phim', url })
+                .catch(() => this._copyStoryUrl(url));
+        } else {
+            this._copyStoryUrl(url);
+        }
+    },
+
+    _copyStoryUrl: function (url) {
+        navigator.clipboard.writeText(url).then(() => {
+            if (window.WanderUI) WanderUI.showToast('Đã sao chép liên kết!', 'success');
+        }).catch(() => {
+            if (window.WanderUI) WanderUI.showToast('Chia sẻ: ' + url, 'info');
+        });
+    },
+
+
+    markStoryAsViewed: function (storyId) {
         const viewed = JSON.parse(localStorage.getItem('wander_viewed_stories') || '[]');
         if (!viewed.includes(storyId)) {
             viewed.push(storyId);
@@ -252,46 +682,383 @@ const SocialHub = {
         }
     },
 
-    openCreateStoryModal: function() {
-        // Tạo modal tạo story
+    openCreateStoryModal: function () {
+        // Tạo modal tạo story (Thước phim ngắn)
         const modal = document.createElement('div');
         modal.id = 'create-story-modal';
-        modal.className = 'modal-overlay';
+        modal.className = 'modal-overlay story-editor-overlay';
         modal.innerHTML = `
-            <div class="create-story-modal">
-                <div class="modal-header">
-                    <h3>Tạo tin mới</h3>
-                    <button onclick="document.getElementById('create-story-modal').remove()">×</button>
+            <div class="story-editor-modal">
+                <div class="editor-header">
+                    <button class="editor-close" onclick="document.getElementById('create-story-modal').remove()">×</button>
+                    <h3>Tạo Thước Phim</h3>
+                    <button class="editor-publish" onclick="SocialHub.submitStory()" id="story-submit-btn" disabled>Đăng tin</button>
                 </div>
-                <div class="modal-body">
-                    <div class="story-upload-area" onclick="document.getElementById('story-file-input').click()">
-                        <span class="upload-icon">📷</span>
-                        <p>Chọn ảnh hoặc video</p>
-                        <input type="file" id="story-file-input" accept="image/*,video/*" hidden onchange="SocialHub.handleStoryUpload(this)">
+                
+                <div class="editor-main">
+                    <div class="editor-preview-container" id="editor-preview-container">
+                        <div class="upload-placeholder" id="upload-placeholder" onclick="document.getElementById('story-file-input').click()">
+                            <span class="upload-icon">📷</span>
+                            <p>Chọn ảnh hoặc video ngắn</p>
+                        </div>
+                        <img id="story-preview-img" class="editor-media" style="display:none;">
+                        <video id="story-preview-video" class="editor-media" style="display:none;" autoplay loop muted></video>
+                        <div id="story-text-overlay-preview" class="story-text-overlay-preview" style="display:none;"></div>
+                        <div id="story-music-overlay-preview" class="story-music-overlay-preview" style="display:none;">
+                            <i class="fas fa-music"></i> <marquee id="music-preview-name" scrollamount="4"></marquee>
+                        </div>
                     </div>
-                    <div id="story-preview" style="display:none; margin-top:1rem;">
-                        <img id="story-preview-img" style="max-width:100%; border-radius:12px;">
-                        <video id="story-preview-video" style="max-width:100%; border-radius:12px; display:none;" controls></video>
+                    
+                    <div class="editor-tools" id="editor-tools" style="opacity: 0.5; pointer-events: none;">
+                        <button class="tool-btn" onclick="SocialHub.openMusicSelector()"><i class="fas fa-music"></i><span>Âm thanh</span></button>
+                        <button class="tool-btn" onclick="SocialHub.openTextEditor()"><i class="fas fa-font"></i><span>Văn bản</span></button>
+                        <button class="tool-btn" onclick="SocialHub.openStickerPicker()"><i class="fas fa-smile"></i><span>Nhãn dán</span></button>
+                        <button class="tool-btn" onclick="SocialHub.openFilterPanel()"><i class="fas fa-magic"></i><span>Bộ lọc</span></button>
+                        <button class="tool-btn" onclick="SocialHub.flipMedia()"><i class="fas fa-arrows-alt-h"></i><span>Lật</span></button>
                     </div>
                 </div>
-                <div class="modal-footer">
-                    <button class="btn btn--primary btn--block" onclick="SocialHub.submitStory()" id="story-submit-btn" disabled>Đăng tin</button>
+                <input type="file" id="story-file-input" accept="image/*,video/*" hidden onchange="SocialHub.handleStoryUpload(this)">
+            </div>
+            
+            <!-- Music Selector Modal -->
+            <div id="music-selector-modal" class="sub-modal" style="display:none;">
+                <div class="sub-modal-content">
+                    <div class="sub-modal-header">
+                        <h4>🎵 Chọn Âm thanh</h4>
+                        <button onclick="SocialHub.closeMusicSelector()">×</button>
+                    </div>
+                    <div class="music-search-bar">
+                        <i class="fas fa-search"></i>
+                        <input type="text" placeholder="Tìm kiếm bài hát..." id="music-search-input" oninput="SocialHub.filterMusicList(this.value)">
+                    </div>
+                    <div class="music-list-hint">Nhấn vào bài hát để nghe thử, sau đó nhấn "Dùng" để chọn</div>
+                    <div class="music-list" id="music-list-container"></div>
+                    <button class="music-stop-btn" onclick="SocialHub.stopMusicPreview()"><i class="fas fa-stop"></i> Dừng phát</button>
+                </div>
+            </div>
+
+            <!-- Text Editor Modal -->
+            <div id="text-editor-modal" class="sub-modal" style="display:none;">
+                <div class="sub-modal-content">
+                    <div class="sub-modal-header">
+                        <h4>Tùy chỉnh Văn bản</h4>
+                        <button onclick="document.getElementById('text-editor-modal').style.display='none'">×</button>
+                    </div>
+                    <div class="text-editor-body">
+                        <input type="text" id="story-text-input" placeholder="Nhập nội dung...">
+                        <div class="text-style-row">
+                            <label style="color:#aaa;font-size:.85rem">Màu chữ</label>
+                            <div class="text-color-picker">
+                                <span class="color-dot" style="background:#ffffff" onclick="SocialHub.setTextOverlayColor('#ffffff')"></span>
+                                <span class="color-dot" style="background:#ff3b30" onclick="SocialHub.setTextOverlayColor('#ff3b30')"></span>
+                                <span class="color-dot" style="background:#34c759" onclick="SocialHub.setTextOverlayColor('#34c759')"></span>
+                                <span class="color-dot" style="background:#007aff" onclick="SocialHub.setTextOverlayColor('#007aff')"></span>
+                                <span class="color-dot" style="background:#ffcc00" onclick="SocialHub.setTextOverlayColor('#ffcc00')"></span>
+                                <span class="color-dot" style="background:#ff00cc" onclick="SocialHub.setTextOverlayColor('#ff00cc')"></span>
+                                <span class="color-dot" style="background:#000000; border-color:#555" onclick="SocialHub.setTextOverlayColor('#000000')"></span>
+                            </div>
+                        </div>
+                        <div class="text-size-row">
+                            <label style="color:#aaa;font-size:.85rem">Cỡ chữ</label>
+                            <input type="range" min="16" max="64" value="28" id="story-text-size" oninput="SocialHub.setTextOverlaySize(this.value)">
+                        </div>
+                        <button class="btn btn--primary" onclick="SocialHub.applyTextOverlay()">Áp dụng</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sticker Picker -->
+            <div id="sticker-picker-modal" class="sub-modal" style="display:none;">
+                <div class="sub-modal-content">
+                    <div class="sub-modal-header"><h4>Chọn Nhãn dán</h4><button onclick="document.getElementById('sticker-picker-modal').style.display='none'">×</button></div>
+                    <div class="sticker-grid" id="sticker-grid"></div>
+                </div>
+            </div>
+
+            <!-- Filter Panel -->
+            <div id="filter-panel-modal" class="sub-modal" style="display:none;">
+                <div class="sub-modal-content">
+                    <div class="sub-modal-header"><h4>Bộ lọc màu</h4><button onclick="document.getElementById('filter-panel-modal').style.display='none'">×</button></div>
+                    <div class="filter-list">
+                        <div class="filter-item" onclick="SocialHub.applyFilter('none')"><div class="filter-preview fp-none"></div><span>Gốc</span></div>
+                        <div class="filter-item" onclick="SocialHub.applyFilter('grayscale(100%)')"><div class="filter-preview fp-bw"></div><span>Trắng đen</span></div>
+                        <div class="filter-item" onclick="SocialHub.applyFilter('sepia(80%)')"><div class="filter-preview fp-sepia"></div><span>Cổ điển</span></div>
+                        <div class="filter-item" onclick="SocialHub.applyFilter('saturate(200%) brightness(1.1)')"><div class="filter-preview fp-vivid"></div><span>Sống động</span></div>
+                        <div class="filter-item" onclick="SocialHub.applyFilter('hue-rotate(90deg) saturate(150%)')"><div class="filter-preview fp-cool"></div><span>Mát lạnh</span></div>
+                        <div class="filter-item" onclick="SocialHub.applyFilter('hue-rotate(320deg) saturate(130%)')"><div class="filter-preview fp-warm"></div><span>Ấm áp</span></div>
+                    </div>
                 </div>
             </div>
         `;
         document.body.appendChild(modal);
+        this.storySelectedMusic = null;
+        this.storyTextContent = '';
+        this.storyTextColor = '#ffffff';
+        this.storyTextPos = { top: '50%', left: '50%' };
+        this.initTextDrag();
     },
 
-    handleStoryUpload: function(input) {
+    initTextDrag: function () {
+        const textEl = document.getElementById('story-text-overlay-preview');
+        const container = document.getElementById('editor-preview-container');
+        if (!textEl || !container) return;
+
+        let isDragging = false, startX, startY, initialX, initialY;
+
+        const startDrag = (e) => {
+            if (!textEl.textContent.trim()) return;
+            isDragging = true;
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            startX = clientX;
+            startY = clientY;
+            const rect = textEl.getBoundingClientRect();
+            const containerRect = container.getBoundingClientRect();
+            initialX = rect.left - containerRect.left + rect.width / 2;
+            initialY = rect.top - containerRect.top + rect.height / 2;
+            e.stopPropagation();
+        };
+
+        const doDrag = (e) => {
+            if (!isDragging) return;
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            const dx = clientX - startX;
+            const dy = clientY - startY;
+
+            let newX = initialX + dx;
+            let newY = initialY + dy;
+
+            textEl.style.left = newX + 'px';
+            textEl.style.top = newY + 'px';
+            textEl.style.transform = 'translate(-50%, -50%)';
+            e.preventDefault();
+        };
+
+        const stopDrag = () => {
+            if (isDragging) {
+                isDragging = false;
+                // Save relative position
+                const containerRect = container.getBoundingClientRect();
+                const textRect = textEl.getBoundingClientRect();
+                this.storyTextPos.left = ((textRect.left + textRect.width / 2 - containerRect.left) / containerRect.width * 100).toFixed(2) + '%';
+                this.storyTextPos.top = ((textRect.top + textRect.height / 2 - containerRect.top) / containerRect.height * 100).toFixed(2) + '%';
+            }
+        };
+
+        textEl.addEventListener('mousedown', startDrag);
+        textEl.addEventListener('touchstart', startDrag, { passive: false });
+        container.addEventListener('mousemove', doDrag);
+        container.addEventListener('touchmove', doDrag, { passive: false });
+        document.addEventListener('mouseup', stopDrag);
+        document.addEventListener('touchend', stopDrag);
+    },
+
+    setTextOverlayColor: function (color) {
+        this.storyTextColor = color;
+        const textPreview = document.getElementById('story-text-overlay-preview');
+        if (textPreview) textPreview.style.color = color;
+        // Highlight selected dot
+        document.querySelectorAll('.color-dot').forEach(d => d.style.outline = '');
+        event?.currentTarget?.style && (event.currentTarget.style.outline = '3px solid #fff');
+    },
+
+    setTextOverlaySize: function (size) {
+        const textPreview = document.getElementById('story-text-overlay-preview');
+        if (textPreview) textPreview.style.fontSize = size + 'px';
+        this.storyTextSize = size;
+    },
+
+    openStickerPicker: function () {
+        const STICKERS = ['🏖️', '🌊', '🏔️', '🌸', '🔥', '⭐', '🎵', '❤️', '😍', '✈️', '🧳', '📸', '🌈', '🎉', '💫', '🍜', '🍹', '🌺', '🦋', '🏕️'];
+        const grid = document.getElementById('sticker-grid');
+        if (grid) grid.innerHTML = STICKERS.map(s => `<div class="sticker-item" onclick="SocialHub.addSticker('${s}')">${s}</div>`).join('');
+        document.getElementById('sticker-picker-modal').style.display = 'flex';
+    },
+
+    addSticker: function (emoji) {
+        const container = document.getElementById('editor-preview-container');
+        if (!container) return;
+        const sticker = document.createElement('div');
+        sticker.className = 'editor-sticker';
+        sticker.textContent = emoji;
+        sticker.style.cssText = 'position:absolute;top:40%;left:40%;font-size:3rem;cursor:grab;z-index:6;user-select:none;';
+
+        // Make sticker draggable
+        let isd = false, sx, sy, ix, iy;
+        sticker.addEventListener('mousedown', e => {
+            isd = true; sx = e.clientX; sy = e.clientY;
+            const r = sticker.getBoundingClientRect(), cr = container.getBoundingClientRect();
+            ix = r.left + r.width / 2 - cr.left; iy = r.top + r.height / 2 - cr.top;
+            e.stopPropagation();
+        });
+        document.addEventListener('mousemove', e => {
+            if (!isd) return;
+            sticker.style.left = (ix + e.clientX - sx) + 'px';
+            sticker.style.top = (iy + e.clientY - sy) + 'px';
+        });
+        document.addEventListener('mouseup', () => { isd = false; });
+
+        container.appendChild(sticker);
+        document.getElementById('sticker-picker-modal').style.display = 'none';
+        if (window.WanderUI) WanderUI.showToast(`Đã thêm nhãn dán ${emoji}`, 'success');
+    },
+
+    openFilterPanel: function () {
+        document.getElementById('filter-panel-modal').style.display = 'flex';
+    },
+
+    applyFilter: function (filterVal) {
+        const img = document.getElementById('story-preview-img');
+        const vid = document.getElementById('story-preview-video');
+        if (img && img.style.display !== 'none') img.style.filter = filterVal === 'none' ? '' : filterVal;
+        if (vid && vid.style.display !== 'none') vid.style.filter = filterVal === 'none' ? '' : filterVal;
+        this.storyFilter = filterVal === 'none' ? '' : filterVal;
+        document.getElementById('filter-panel-modal').style.display = 'none';
+        if (window.WanderUI) WanderUI.showToast('Đã áp dụng bộ lọc!', 'success');
+    },
+
+    flipMedia: function () {
+        const img = document.getElementById('story-preview-img');
+        const vid = document.getElementById('story-preview-video');
+        this.storyFlipped = !this.storyFlipped;
+        const val = this.storyFlipped ? 'scaleX(-1)' : 'scaleX(1)';
+        if (img) img.style.transform = val;
+        if (vid) vid.style.transform = val;
+    },
+
+
+    // Danh sách nhạc mẫu (free audio URLs)
+    MUSIC_TRACKS: [
+        { id: 1, name: 'Sunny Day Vibes', author: 'WanderViệt', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3', genre: 'Pop', emoji: '☀️' },
+        { id: 2, name: 'Chill Travel', author: 'Lofi Studio', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3', genre: 'Lofi', emoji: '🌊' },
+        { id: 3, name: 'Adventure Awaits', author: 'Epic Sounds', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3', genre: 'Epic', emoji: '🏔️' },
+        { id: 4, name: 'Vietnam Morning', author: 'WanderViệt', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3', genre: 'Acoustic', emoji: '🌸' },
+        { id: 5, name: 'Street Food Beat', author: 'City Vibes', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3', genre: 'Electronic', emoji: '🍜' },
+        { id: 6, name: 'Mekong Sunset', author: 'Indie Folk', url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3', genre: 'Folk', emoji: '🌅' },
+    ],
+
+    closeMusicSelector: function () {
+        this.stopMusicPreview();
+        document.getElementById('music-selector-modal').style.display = 'none';
+    },
+
+    stopMusicPreview: function () {
+        if (this._previewAudio) {
+            this._previewAudio.pause();
+            this._previewAudio = null;
+        }
+        document.querySelectorAll('.music-item').forEach(el => el.classList.remove('previewing'));
+    },
+
+    filterMusicList: function (query) {
+        const q = query.toLowerCase();
+        const list = document.getElementById('music-list-container');
+        if (!list) return;
+        list.innerHTML = this.MUSIC_TRACKS
+            .filter(t => t.name.toLowerCase().includes(q) || t.author.toLowerCase().includes(q) || t.genre.toLowerCase().includes(q))
+            .map(t => `
+                <div class="music-item" id="music-track-${t.id}" onclick="SocialHub.previewMusic(${t.id})">
+                    <div class="music-icon">${t.emoji}</div>
+                    <div class="music-info"><b>${t.name}</b><span>${t.author} &bull; ${t.genre}</span></div>
+                    <button class="music-use-btn" onclick="event.stopPropagation(); SocialHub.selectMusic(${t.id})">Dùng</button>
+                </div>
+            `).join('');
+    },
+
+    openMusicSelector: function () {
+        const list = document.getElementById('music-list-container');
+        if (list && !list.innerHTML.trim()) {
+            list.innerHTML = this.MUSIC_TRACKS.map(t => `
+                <div class="music-item" id="music-track-${t.id}" onclick="SocialHub.previewMusic(${t.id})">
+                    <div class="music-icon">${t.emoji}</div>
+                    <div class="music-info">
+                        <b>${t.name}</b>
+                        <span>${t.author} &bull; ${t.genre}</span>
+                    </div>
+                    <button class="music-use-btn" onclick="event.stopPropagation(); SocialHub.selectMusic(${t.id})">
+                        Dùng
+                    </button>
+                </div>
+            `).join('');
+        }
+        document.getElementById('music-selector-modal').style.display = 'flex';
+    },
+
+    previewMusic: function (trackId) {
+        const track = this.MUSIC_TRACKS.find(t => t.id === trackId);
+        if (!track) return;
+
+        // Dừng preview cũ nếu có
+        if (this._previewAudio) {
+            this._previewAudio.pause();
+            this._previewAudio = null;
+        }
+
+        // Tô sáng item đang preview
+        document.querySelectorAll('.music-item').forEach(el => el.classList.remove('previewing'));
+        document.getElementById(`music-track-${trackId}`)?.classList.add('previewing');
+
+        // Phát thử 10 giây
+        const audio = new Audio(track.url);
+        audio.volume = 0.6;
+        audio.play().catch(() => { });
+        setTimeout(() => { if (this._previewAudio === audio) { audio.pause(); this._previewAudio = null; } }, 10000);
+        this._previewAudio = audio;
+    },
+
+    selectMusic: function (trackId) {
+        const track = this.MUSIC_TRACKS.find(t => t.id === trackId);
+        if (!track) return;
+
+        // Dừng preview
+        if (this._previewAudio) { this._previewAudio.pause(); this._previewAudio = null; }
+
+        this.storySelectedMusic = { name: track.name, author: track.author, url: track.url };
+
+        // Hiển thị overlay music trong preview
+        const musicPreview = document.getElementById('story-music-overlay-preview');
+        musicPreview.style.display = 'flex';
+        document.getElementById('music-preview-name').textContent = `${track.emoji} ${track.name} - ${track.author}`;
+        document.getElementById('music-selector-modal').style.display = 'none';
+        if (window.WanderUI) WanderUI.showToast(`Âm thanh: ${track.emoji} ${track.name}`, 'success');
+    },
+
+    openTextEditor: function () {
+        document.getElementById('text-editor-modal').style.display = 'flex';
+        const input = document.getElementById('story-text-input');
+        input.value = this.storyTextContent;
+        input.focus();
+    },
+
+    applyTextOverlay: function () {
+        const text = document.getElementById('story-text-input').value;
+        const textPreview = document.getElementById('story-text-overlay-preview');
+        if (text.trim()) {
+            this.storyTextContent = text;
+            textPreview.style.display = 'block';
+            textPreview.textContent = text;
+            textPreview.style.color = this.storyTextColor;
+            // Make pointer events active so we can drag it
+            textPreview.style.pointerEvents = 'auto';
+            textPreview.style.cursor = 'grab';
+        } else {
+            this.storyTextContent = '';
+            textPreview.style.display = 'none';
+        }
+        document.getElementById('text-editor-modal').style.display = 'none';
+    },
+
+    handleStoryUpload: function (input) {
         const file = input.files[0];
         if (!file) return;
-        
-        const preview = document.getElementById('story-preview');
+
         const img = document.getElementById('story-preview-img');
         const video = document.getElementById('story-preview-video');
-        
-        preview.style.display = 'block';
-        
+        const placeholder = document.getElementById('upload-placeholder');
+
+        placeholder.style.display = 'none';
+
         if (file.type.startsWith('video/')) {
             img.style.display = 'none';
             video.style.display = 'block';
@@ -301,17 +1068,34 @@ const SocialHub = {
             img.style.display = 'block';
             img.src = URL.createObjectURL(file);
         }
-        
+
         document.getElementById('story-submit-btn').disabled = false;
+        document.getElementById('editor-tools').style.opacity = '1';
+        document.getElementById('editor-tools').style.pointerEvents = 'auto';
         this.storyFileToUpload = file;
     },
 
-    submitStory: async function() {
+    submitStory: async function () {
         if (!this.storyFileToUpload) return;
-        
+
+        const submitBtn = document.getElementById('story-submit-btn');
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="loading-spinner"></span>';
+
         const formData = new FormData();
         formData.append('media', this.storyFileToUpload);
-        
+        if (this.storySelectedMusic) {
+            formData.append('musicName', this.storySelectedMusic.name);
+            formData.append('musicAuthor', this.storySelectedMusic.author);
+            formData.append('musicUrl', this.storySelectedMusic.url || '');
+        }
+        if (this.storyTextContent) {
+            formData.append('textOverlay', this.storyTextContent);
+            formData.append('textColor', this.storyTextColor || '#ffffff');
+            formData.append('textTop', this.storyTextPos?.top || '50%');
+            formData.append('textLeft', this.storyTextPos?.left || '50%');
+        }
+
         try {
             const res = await fetch('/api/social/stories', {
                 method: 'POST',
@@ -320,64 +1104,102 @@ const SocialHub = {
             });
             const data = await res.json();
             if (data.success) {
-                document.getElementById('create-story-modal').remove();
+                const modal = document.getElementById('create-story-modal');
+                if (modal) modal.remove();
+
+                // Dừng music preview
+                if (this._previewAudio) { this._previewAudio.pause(); this._previewAudio = null; }
+
+                // Cập nhật local array
+                const newStory = data.data;
+                newStory.user = {
+                    _id: this.user._id,
+                    name: this.user.name,
+                    displayName: this.user.displayName,
+                    avatar: this.user.avatar
+                };
+
+                this.stories.unshift(newStory);
+                this.renderStories();
+
+                // Reset states
                 this.storyFileToUpload = null;
-                this.fetchStories(); // Refresh stories
-                if (window.WanderUI) WanderUI.showToast('Đã đăng tin!', 'success');
+                this.storySelectedMusic = null;
+                this.storyTextContent = '';
+                this.storyTextColor = '#ffffff';
+                this.storyTextPos = { top: '50%', left: '50%' };
+                this.storyFilter = '';
+                this.storyFlipped = false;
+
+                if (window.WanderUI) WanderUI.showToast('Đã đăng thước phim! 🎉', 'success');
+            } else {
+                if (window.WanderUI) WanderUI.showToast(data.message || 'Lỗi đăng tin', 'error');
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = 'Đăng tin';
             }
         } catch (err) {
             console.error("Lỗi đăng story:", err);
-            if (window.WanderUI) WanderUI.showToast('Lỗi đăng tin', 'error');
+            if (window.WanderUI) WanderUI.showToast('Lỗi hệ thống', 'error');
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = 'Đăng tin';
         }
     },
 
-    startStoriesAutoRefresh: function() {
+    startStoriesAutoRefresh: function () {
         // Refresh stories mỗi 2 phút
         setInterval(() => {
             this.fetchStories();
         }, 120000);
     },
 
-    fetchFeed: async function() {
+    fetchFeed: async function () {
         const feedContainer = document.getElementById('feed-container');
         if (!feedContainer) return;
         feedContainer.innerHTML = '<div class="loading-shimmer" style="padding:40px;text-align:center">Đang tải bảng tin...</div>';
         try {
             const res = await fetch('/api/social/feed', { headers: { 'x-auth-token': localStorage.getItem('wander_token') } });
             const data = await res.json();
-            if (data.success) { this.posts = data.data; this.renderFeed(); }
-        } catch (err) { feedContainer.innerHTML = '<p class="error" style="text-align:center;padding:40px;">Không thể tải bảng tin.</p>'; }
+            if (data.success) {
+                this.posts = data.data;
+                this.renderFeed();
+            } else {
+                feedContainer.innerHTML = '<div class="glass-card" style="text-align:center;padding:60px;border-radius:24px;"><p style="color:var(--text-muted);font-weight:600;">Không thể tải bảng tin. Vui lòng thử lại.</p></div>';
+            }
+        } catch (err) {
+            console.error('fetchFeed error:', err);
+            feedContainer.innerHTML = '<p class="error" style="text-align:center;padding:40px;">Không thể tải bảng tin.</p>';
+        }
     },
 
-    renderFeed: function() {
+    renderFeed: function () {
         const feedContainer = document.getElementById('feed-container');
         if (!feedContainer) return;
         if (this.posts.length === 0) {
-            feedContainer.innerHTML = '<div class="glass-card" style="text-align:center;padding:60px;"><p style="font-size:1.2rem;margin-bottom:8px;">📝</p><p style="color:var(--text-muted)">Chưa có bài viết nào. Hãy là người đầu tiên chia sẻ!</p></div>';
+            feedContainer.innerHTML = '<div class="glass-card" style="text-align:center;padding:60px;border-radius:24px;"><p style="font-size:2.5rem;margin-bottom:16px;color:rgba(255,255,255,0.1);"><i class="fas fa-edit"></i></p><p style="color:var(--text-muted);font-weight:600;">Chưa có bài viết nào. Hãy là người đầu tiên chia sẻ!</p></div>';
             return;
         }
         feedContainer.innerHTML = this.posts.map(post => this.renderPostCard(post)).join('');
     },
 
-    renderPostCard: function(post) {
+    renderPostCard: function (post) {
         // Xử lý reactions (6 loại: like, love, wow, haha, sad, angry)
         const reactions = post.reactions || {};
         const userReaction = reactions[this.user?._id] || null;
         const totalReactions = Object.values(reactions).length;
-        
+
         // Đếm từng loại reaction
         const reactionCounts = { like: 0, love: 0, wow: 0, haha: 0, sad: 0, angry: 0 };
         Object.values(reactions).forEach(r => {
             if (reactionCounts[r] !== undefined) reactionCounts[r]++;
         });
-        
+
         // Top 3 reactions để hiển thị
         const topReactions = Object.entries(reactionCounts)
             .filter(([_, count]) => count > 0)
             .sort((a, b) => b[1] - a[1])
             .slice(0, 3)
             .map(([type]) => type);
-        
+
         const postAuthorId = post.userId?._id || post.userId;
         const isOwner = postAuthorId === this.user?._id || postAuthorId?.toString() === this.user?._id;
         const commentsHtml = (post.comments || []).slice(-3).map(c => this.renderCommentItem(c, postAuthorId)).join('');
@@ -385,7 +1207,7 @@ const SocialHub = {
         return `
             <div class="glass-card post-card" data-post-id="${post._id}">
                 <div class="post-header">
-                    <div class="post-user" onclick="SocialHub.viewProfile('${post.userId}')">
+                    <div class="post-user" onclick="SocialHub.viewProfile('${postAuthorId}')">
                         <img src="${post.userAvatar || 'assets/default-avatar.svg'}" alt="" class="avatar-sm" onerror="if(!this.dataset.errorHandled){this.dataset.errorHandled='true';this.src='assets/default-avatar.svg'}">
                         <div>
                             <h4>${post.userName}</h4>
@@ -394,10 +1216,10 @@ const SocialHub = {
                     </div>
                     ${isOwner ? `
                         <div class="post-menu-dropdown">
-                            <button class="btn-icon post-menu-btn" onclick="SocialHub.togglePostMenu('${post._id}')">⋯</button>
+                            <button class="btn-icon post-menu-btn" onclick="SocialHub.togglePostMenu('${post._id}')"><i class="fas fa-ellipsis-h"></i></button>
                             <div class="post-menu" id="post-menu-${post._id}" style="display:none">
-                                <button onclick="SocialHub.editPost('${post._id}')">✏️ Chỉnh sửa</button>
-                                <button onclick="SocialHub.deletePost('${post._id}')" class="text-danger">🗑️ Xóa</button>
+                                <button onclick="SocialHub.editPost('${post._id}')"><i class="fas fa-edit"></i> Chỉnh sửa</button>
+                                <button onclick="SocialHub.deletePost('${post._id}')" class="text-danger"><i class="fas fa-trash-alt"></i> Xóa</button>
                             </div>
                         </div>
                     ` : ''}
@@ -405,10 +1227,10 @@ const SocialHub = {
                 <div class="post-content">${this.linkifyContent(post.content)}</div>
                 ${post.media && post.media.length > 0 ? `
                     <div class="post-media ${post.media.length > 1 ? 'media-grid' : ''}">
-                        ${post.media.map((m, i) => m.type === 'image' 
-                            ? `<img src="${m.url}" alt="Ảnh bài viết" onclick="SocialHub.viewImage('${m.url}')" onerror="this.style.display='none'">` 
-                            : `<video src="${m.url}" controls ${i === 0 ? 'autoplay muted' : ''}></video>`
-                        ).join('')}
+                        ${post.media.map((m, i) => m.type === 'image'
+            ? `<img src="${m.url}" alt="Ảnh bài viết" onclick="SocialHub.viewImage('${m.url}')" onerror="this.style.display='none'">`
+            : `<video src="${m.url}" controls></video>`
+        ).join('')}
                     </div>
                 ` : ''}
                 
@@ -442,8 +1264,8 @@ const SocialHub = {
                             <span onclick="SocialHub.setReaction('${post._id}', 'angry')" class="reaction-btn">😠</span>
                         </div>
                     </div>
-                    <button class="post-action" onclick="SocialHub.toggleCommentBox('${post._id}')">💬 Bình luận</button>
-                    <button class="post-action" onclick="SocialHub.sharePost('${post._id}')">↗️ Chia sẻ</button>
+                    <button class="post-action" onclick="SocialHub.toggleCommentBox('${post._id}')"><i class="far fa-comment"></i> Bình luận</button>
+                    <button class="post-action" onclick="SocialHub.sharePost('${post._id}')"><i class="fas fa-share"></i> Chia sẻ</button>
                 </div>
                 
                 <!-- Comments Section -->
@@ -457,7 +1279,7 @@ const SocialHub = {
                         <div class="comment-input-box">
                             <input type="text" placeholder="Viết bình luận..." id="comment-input-${post._id}" 
                                    onkeydown="if(event.key==='Enter')SocialHub.addComment('${post._id}')">
-                            <button class="comment-send-btn" onclick="SocialHub.addComment('${post._id}')">➤</button>
+                            <button class="comment-send-btn" onclick="SocialHub.addComment('${post._id}')"><i class="fas fa-paper-plane"></i></button>
                         </div>
                     </div>
                 </div>
@@ -466,21 +1288,21 @@ const SocialHub = {
     },
 
     // ========== REACTIONS SYSTEM ==========
-    getReactionEmoji: function(type) {
+    getReactionEmoji: function (type) {
         const emojis = { like: '❤️', love: '😍', wow: '😮', haha: '😂', sad: '😢', angry: '😠' };
         return emojis[type] || '❤️';
     },
 
-    getReactionLabel: function(type) {
+    getReactionLabel: function (type) {
         const labels = { like: 'Thích', love: 'Yêu thích', wow: 'Wow', haha: 'Haha', sad: 'Buồn', angry: 'Phẫn nộ' };
         return labels[type] || 'Thích';
     },
 
-    toggleReaction: function(postId) {
+    toggleReaction: function (postId) {
         // Toggle like mặc định nếu chưa có reaction
         const post = this.posts.find(p => p._id === postId);
         if (!post) return;
-        
+
         const currentReaction = post.reactions?.[this.user._id];
         if (currentReaction) {
             this.removeReaction(postId);
@@ -489,11 +1311,11 @@ const SocialHub = {
         }
     },
 
-    setReaction: function(postId, reactionType) {
+    setReaction: function (postId, reactionType) {
         // Gửi reaction lên server
         fetch(`/api/social/posts/${postId}/reaction`, {
             method: 'POST',
-            headers: { 
+            headers: {
                 'Content-Type': 'application/json',
                 'x-auth-token': localStorage.getItem('wander_token')
             },
@@ -512,7 +1334,7 @@ const SocialHub = {
         }).catch(err => console.error('Reaction error:', err));
     },
 
-    removeReaction: function(postId) {
+    removeReaction: function (postId) {
         fetch(`/api/social/posts/${postId}/reaction`, {
             method: 'DELETE',
             headers: { 'x-auth-token': localStorage.getItem('wander_token') }
@@ -527,27 +1349,27 @@ const SocialHub = {
         }).catch(err => console.error('Remove reaction error:', err));
     },
 
-    showReactionPicker: function(postId) {
+    showReactionPicker: function (postId) {
         if (this.pickerTimeout) clearTimeout(this.pickerTimeout);
         const picker = document.getElementById(`reaction-picker-${postId}`);
         if (picker) picker.classList.add('visible');
     },
 
-    hideReactionPicker: function(postId) {
+    hideReactionPicker: function (postId) {
         this.pickerTimeout = setTimeout(() => {
             const picker = document.getElementById(`reaction-picker-${postId}`);
             if (picker) picker.classList.remove('visible');
         }, 300);
     },
 
-    showReactionsList: function(postId) {
+    showReactionsList: function (postId) {
         const post = this.posts.find(p => p._id === postId);
         if (!post || !post.reactions) return;
-        
+
         // Tạo modal hiển thị danh sách người đã react
         const reactions = post.reactions;
         const users = Object.entries(reactions).map(([userId, reaction]) => ({ userId, reaction }));
-        
+
         const modal = document.createElement('div');
         modal.className = 'modal-overlay reactions-list-modal';
         modal.innerHTML = `
@@ -558,9 +1380,9 @@ const SocialHub = {
                 </div>
                 <div class="reactions-tabs">
                     <button class="tab active" data-tab="all">Tất cả</button>
-                    ${['like', 'love', 'wow', 'haha', 'sad', 'angry'].map(r => 
-                        `<button class="tab" data-tab="${r}">${this.getReactionEmoji(r)}</button>`
-                    ).join('')}
+                    ${['like', 'love', 'wow', 'haha', 'sad', 'angry'].map(r =>
+            `<button class="tab" data-tab="${r}">${this.getReactionEmoji(r)}</button>`
+        ).join('')}
                 </div>
                 <div class="reactions-list">
                     ${users.map(u => `
@@ -576,7 +1398,7 @@ const SocialHub = {
         document.body.appendChild(modal);
     },
 
-    renderCommentItem: function(comment, postAuthorId) {
+    renderCommentItem: function (comment, postAuthorId) {
         const isAuthor = (comment.userId?._id || comment.userId) === postAuthorId;
         return `
             <div class="comment-item" data-comment-id="${comment._id}">
@@ -605,31 +1427,31 @@ const SocialHub = {
         `;
     },
 
-    togglePostMenu: function(postId) {
+    togglePostMenu: function (postId) {
         const menu = document.getElementById(`post-menu-${postId}`);
         if (menu) {
             menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
         }
     },
 
-    editPost: function(postId) {
+    editPost: function (postId) {
         // TODO: Implement edit functionality
         if (window.WanderUI) WanderUI.showToast('Tính năng chỉnh sửa đang phát triển', 'info');
     },
 
-    linkifyContent: function(text) {
+    linkifyContent: function (text) {
         if (!text) return '';
         return text.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank">$1</a>')
-                   .replace(/#(\w+)/g, '<span class="hashtag">#$1</span>')
-                   .replace(/@(\w+)/g, '<span class="mention">@$1</span>')
-                   .replace(/\n/g, '<br>');
+            .replace(/#(\w+)/g, '<span class="hashtag">#$1</span>')
+            .replace(/@(\w+)/g, '<span class="mention">@$1</span>')
+            .replace(/\n/g, '<br>');
     },
 
-    setupEventListeners: function() {
+    setupEventListeners: function () {
         // Open post modal
         const openBtn = document.getElementById('open-post-modal');
         if (openBtn) openBtn.onclick = () => { this.openPostModal(); };
-        
+
         // Post tools triggers
         document.querySelectorAll('.post-tool').forEach((tool, idx) => {
             tool.onclick = (e) => {
@@ -643,20 +1465,20 @@ const SocialHub = {
 
         // Close post modal
         document.getElementById('close-modal-btn')?.addEventListener('click', () => { document.getElementById('post-modal')?.setAttribute('hidden', ''); });
-        document.getElementById('post-modal')?.addEventListener('click', (e) => { if(e.target.id === 'post-modal') e.target.setAttribute('hidden', ''); });
-        
+        document.getElementById('post-modal')?.addEventListener('click', (e) => { if (e.target.id === 'post-modal') e.target.setAttribute('hidden', ''); });
+
         // Close post modal v2
         document.getElementById('close-post-modal')?.addEventListener('click', () => { document.getElementById('post-modal')?.setAttribute('hidden', ''); });
-        
+
         // Submit post
         document.getElementById('submit-post')?.addEventListener('click', () => this.submitPost());
-        
+
         // Tag location
         document.getElementById('tag-location')?.addEventListener('click', () => {
-            const name = prompt("Nhập tên địa điểm:"); 
-            if (name) { 
-                document.getElementById('tag-location').innerHTML = `📍 ${name}`; 
-                document.getElementById('tag-location').dataset.location = name; 
+            const name = prompt("Nhập tên địa điểm:");
+            if (name) {
+                document.getElementById('tag-location').innerHTML = `📍 ${name}`;
+                document.getElementById('tag-location').dataset.location = name;
                 document.getElementById('tag-location').classList.add('active');
             }
         });
@@ -670,11 +1492,22 @@ const SocialHub = {
                 preview.innerHTML += f.type.startsWith('image') ? `<img src="${url}" class="preview-thumb">` : `<video src="${url}" class="preview-thumb" controls></video>`;
             });
         });
-        // Search users
+        // Global Search
         const searchInput = document.getElementById('user-search-input');
         if (searchInput) {
-            let debounce;
-            searchInput.oninput = () => { clearTimeout(debounce); debounce = setTimeout(() => this.searchUsers(searchInput.value), 300); };
+            searchInput.addEventListener('input', (e) => this.performGlobalSearch(e.target.value));
+            searchInput.addEventListener('focus', () => this.showSearchSuggestions());
+            searchInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    this.openFullSearch(e.target.value);
+                }
+            });
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.search-card')) {
+                    const results = document.getElementById('search-results');
+                    if (results) results.style.display = 'none';
+                }
+            });
         }
         // Chat drawer close
         document.getElementById('close-chat')?.addEventListener('click', () => this.closeChat());
@@ -687,7 +1520,7 @@ const SocialHub = {
         });
     },
 
-    openPostModal: function() {
+    openPostModal: function () {
         const m = document.getElementById('post-modal');
         if (m) {
             m.removeAttribute('hidden');
@@ -695,92 +1528,101 @@ const SocialHub = {
         }
     },
 
-    switchTab: function(tab) {
+    switchTab: function (tab) {
         this.activeTab = tab;
         document.querySelectorAll('.social-nav-tab, .mobile-nav-item').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
         document.querySelectorAll('.tab-panel').forEach(p => p.style.display = p.id === `panel-${tab}` ? 'block' : 'none');
-        
+
         // Scroll to top when switching tabs
         window.scrollTo({ top: 0, behavior: 'smooth' });
     },
 
-    searchUsers: async function(query) {
-        const resultsEl = document.getElementById('search-results');
-        if (!resultsEl || !query || query.length < 2) { if (resultsEl) resultsEl.innerHTML = ''; return; }
-        try {
-            const res = await fetch(`/api/social/users/search?q=${encodeURIComponent(query)}`, { headers: { 'x-auth-token': localStorage.getItem('wander_token') } });
-            const data = await res.json();
-            if (data.success) {
-                resultsEl.innerHTML = data.data.map(u => `
-                    <div class="search-result-item" onclick="SocialHub.viewProfile('${u._id}')">
-                        <img src="${u.avatar || 'assets/default-avatar.svg'}" class="avatar-xs" alt="" onerror="if(!this.dataset.errorHandled){this.dataset.errorHandled='true';this.src='assets/default-avatar.svg'}">
-                        <div class="search-info">
-                            <strong>${u.displayName || u.name}</strong>
-                            <span>Hạng ${u.rank || 'Đồng'} · ${u.points || 0} XP</span>
-                        </div>
-                    </div>
-                `).join('');
-            }
-        } catch (err) {}
-    },
-
-    submitPost: async function() {
-        const content = document.getElementById('post-content')?.value;
+    submitPost: async function () {
+        const contentInput = document.getElementById('post-content');
+        const content = contentInput ? contentInput.value : '';
         const fileInput = document.getElementById('media-upload');
         const locationEl = document.getElementById('tag-location');
         const submitBtn = document.getElementById('submit-post');
-        if (!content?.trim() && (!fileInput?.files || fileInput.files.length === 0)) return alert("Vui lòng nhập nội dung hoặc chọn ảnh!");
-        
-        submitBtn.disabled = true; 
-        submitBtn.innerHTML = '<span class="loading-spinner"></span> Đang đăng...';
-        
+
+        if (!content.trim() && (!fileInput?.files || fileInput.files.length === 0)) {
+            return alert("Vui lòng nhập nội dung hoặc chọn ảnh!");
+        }
+
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="loading-spinner"></span> Đang đăng...';
+        }
+
         try {
             let res;
+            const token = localStorage.getItem('wander_token');
             if (fileInput?.files?.length > 0) {
                 const formData = new FormData();
                 formData.append('content', content || '');
                 if (locationEl?.dataset?.location) formData.append('locationName', locationEl.dataset.location);
                 Array.from(fileInput.files).forEach(f => formData.append('media', f));
-                res = await fetch('/api/social/posts/media', { method: 'POST', headers: { 'x-auth-token': localStorage.getItem('wander_token') }, body: formData });
+                res = await fetch('/api/social/posts/media', {
+                    method: 'POST',
+                    headers: { 'x-auth-token': token },
+                    body: formData
+                });
             } else {
-                res = await fetch('/api/social/posts', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-auth-token': localStorage.getItem('wander_token') }, body: JSON.stringify({ content, location: locationEl?.dataset?.location ? { name: locationEl.dataset.location } : null }) });
+                res = await fetch('/api/social/posts', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-auth-token': token
+                    },
+                    body: JSON.stringify({
+                        content,
+                        location: locationEl?.dataset?.location ? { name: locationEl.dataset.location } : null
+                    })
+                });
             }
             const data = await res.json();
             if (data.success) {
                 document.getElementById('post-modal')?.setAttribute('hidden', '');
-                document.getElementById('post-content').value = '';
+                if (contentInput) contentInput.value = '';
                 if (fileInput) fileInput.value = '';
-                document.getElementById('media-preview').innerHTML = '';
-                if (locationEl) { 
-                    locationEl.innerHTML = '📍 Gắn thẻ địa điểm'; 
-                    delete locationEl.dataset.location; 
+                const preview = document.getElementById('media-preview');
+                if (preview) preview.innerHTML = '';
+                if (locationEl) {
+                    locationEl.innerHTML = '📍 Gắn thẻ địa điểm';
+                    delete locationEl.dataset.location;
                     locationEl.classList.remove('active');
                 }
                 await this.fetchFeed();
-                await this.loadUserProfile(); // Refresh stats
+                await this.loadUserProfile();
             }
-        } catch (err) { alert("Lỗi khi đăng bài!"); }
-        finally { submitBtn.disabled = false; submitBtn.textContent = "Đăng bài"; }
+        } catch (err) {
+            console.error(err);
+            alert("Lỗi khi đăng bài!");
+        } finally {
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.textContent = "Đăng bài";
+            }
+        }
     },
 
-    toggleLike: async function(postId, isLiked) {
+    toggleLike: async function (postId, isLiked) {
         try {
             const endpoint = isLiked ? '/api/social/unlike' : '/api/social/like';
             await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-auth-token': localStorage.getItem('wander_token') }, body: JSON.stringify({ targetId: postId, targetType: 'post' }) });
             await this.fetchFeed();
-        } catch (err) {}
+        } catch (err) { }
     },
 
-    toggleCommentBox: function(postId) {
+    toggleCommentBox: function (postId) {
         const section = document.getElementById(`comments-${postId}`);
-        if (section) { 
+        if (section) {
             const isHidden = section.style.display === 'none';
             section.style.display = isHidden ? 'block' : 'none';
             if (isHidden) section.querySelector('input')?.focus();
         }
     },
 
-    showAllComments: function(postId) {
+    showAllComments: function (postId) {
         const post = this.posts.find(p => p._id === postId);
         if (!post) return;
         const list = document.querySelector(`#comments-${postId} .comments-list`);
@@ -794,7 +1636,7 @@ const SocialHub = {
         }
     },
 
-    addComment: async function(postId) {
+    addComment: async function (postId) {
         const input = document.getElementById(`comment-input-${postId}`);
         const text = input?.value?.trim();
         if (!text) return;
@@ -803,10 +1645,10 @@ const SocialHub = {
             await fetch(`/api/social/posts/${postId}/comment`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-auth-token': localStorage.getItem('wander_token') }, body: JSON.stringify({ text }) });
             await this.fetchFeed();
             setTimeout(() => { const s = document.getElementById(`comments-${postId}`); if (s) s.style.display = 'block'; }, 100);
-        } catch (err) {}
+        } catch (err) { }
     },
 
-    sharePost: async function(postId) {
+    sharePost: async function (postId) {
         const postUrl = `${window.location.origin}/social-hub.html?post=${postId}`;
         try {
             await navigator.clipboard.writeText(postUrl);
@@ -819,7 +1661,7 @@ const SocialHub = {
         }
     },
 
-    deletePost: async function(postId) {
+    deletePost: async function (postId) {
         if (!window.WanderUI || !WanderUI.confirm) {
             if (!confirm("Bạn có chắc muốn xóa bài viết này?")) return;
         } else {
@@ -830,14 +1672,14 @@ const SocialHub = {
             await fetch(`/api/social/posts/${postId}`, { method: 'DELETE', headers: { 'x-auth-token': localStorage.getItem('wander_token') } });
             await this.fetchFeed();
             await this.loadUserProfile(); // Update stats
-        } catch (err) {}
+        } catch (err) { }
     },
 
-    viewProfile: function(userId) {
+    viewProfile: function (userId) {
         window.location.href = `profile.html?id=${userId}`;
     },
 
-    viewImage: function(url) {
+    viewImage: function (url) {
         const overlay = document.createElement('div');
         overlay.className = 'image-viewer-overlay';
         overlay.innerHTML = `
@@ -852,7 +1694,7 @@ const SocialHub = {
     },
 
     // ========== GUEST STATE HANDLING ==========
-    showGuestLanding: function() {
+    showGuestLanding: function () {
         const main = document.querySelector('.social-main');
         if (!main) return;
         main.innerHTML = `
@@ -872,10 +1714,10 @@ const SocialHub = {
     },
 
     // ========== TRENDING ==========
-    renderTrending: function() {
+    renderTrending: function () {
         const container = document.querySelector('.trending-list');
         if (!container) return;
-        
+
         // Dynamic trending topics based on actual community activity (mocked for now but looking real)
         const trends = [
             { tag: '#WanderViet2024', count: '1.4k bài viết', hot: true },
@@ -898,7 +1740,7 @@ const SocialHub = {
         `).join('');
     },
 
-    searchHashtag: function(tag) {
+    searchHashtag: function (tag) {
         const input = document.getElementById('user-search-input');
         if (input) {
             input.value = tag;
@@ -907,7 +1749,7 @@ const SocialHub = {
     },
 
     // ========== FRIENDS ==========
-    fetchPendingFriends: async function() {
+    fetchPendingFriends: async function () {
         const container = document.getElementById('friend-suggestions');
         if (!container) return;
         try {
@@ -916,7 +1758,7 @@ const SocialHub = {
             if (data.success && data.data.length > 0) {
                 container.innerHTML = data.data.map(f => `
                     <div class="friend-request-card">
-                        <img src="${f.requester?.avatar || 'assets/default-avatar.svg'}" class="avatar-sm" onerror="if(!this.dataset.errorHandled){this.dataset.errorHandled='true';this.src='assets/default-avatar.svg'}" onclick="SocialHub.viewProfile('${f.requester?._id}')" style="cursor:pointer">
+                        <img src="${f.requester?.avatar || 'assets/default-avatar.svg'}" class="avatar-sm" onerror="if(!this.dataset.errorHandled){this.dataset.errorHandled='true';this.src='assets/default-avatar.svg'}" onclick="SocialHub.viewProfile('${f.requester?._id || f.requester?.id}')" style="cursor:pointer">
                         <div class="friend-info">
                             <strong>${f.requester?.displayName || f.requester?.name || 'Người dùng'}</strong>
                             <span>Hạng ${f.requester?.rank || 'Đồng'}</span>
@@ -930,19 +1772,19 @@ const SocialHub = {
             } else {
                 container.innerHTML = '<p class="empty-state-text">Không có lời mời mới.</p>';
             }
-        } catch (err) {}
+        } catch (err) { }
     },
 
-    respondFriend: async function(id, action) {
+    respondFriend: async function (id, action) {
         try {
             await fetch('/api/social/friends/respond', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-auth-token': localStorage.getItem('wander_token') }, body: JSON.stringify({ friendshipId: id, action }) });
             this.fetchPendingFriends();
             this.loadFriendsList();
             this.loadUserProfile(); // Update friend count
-        } catch (err) {}
+        } catch (err) { }
     },
 
-    loadFriendsList: async function() {
+    loadFriendsList: async function () {
         const container = document.getElementById('friends-list-container');
         if (!container) return;
         try {
@@ -950,23 +1792,23 @@ const SocialHub = {
             const data = await res.json();
             if (data.success && data.data.length > 0) {
                 container.innerHTML = data.data.map(f => `
-                    <div class="friend-item" onclick="SocialHub.viewProfile('${f._id}')">
+                    <div class="friend-item" onclick="SocialHub.viewProfile('${f._id || f.id}')">
                         <img src="${f.avatar || 'assets/default-avatar.svg'}" class="avatar-sm" alt="" onerror="if(!this.dataset.errorHandled){this.dataset.errorHandled='true';this.src='assets/default-avatar.svg'}">
                         <div class="friend-info">
                             <strong>${f.displayName || f.name}</strong>
                             <span>Hạng ${f.rank || 'Đồng'}</span>
                         </div>
-                        <button class="btn-xs btn--chat" onclick="event.stopPropagation(); SocialHub.openChat('${f._id}', '${(f.displayName || f.name).replace(/'/g, '')}', '${f.avatar || ''}')">💬</button>
+                        <button class="btn-xs btn--chat" onclick="event.stopPropagation(); SocialHub.openChat('${f._id || f.id}', '${(f.displayName || f.name).replace(/'/g, '')}', '${f.avatar || ''}')">💬</button>
                     </div>
                 `).join('');
             } else {
                 container.innerHTML = '<p class="empty-state-text">Chưa có bạn bè.</p>';
             }
-        } catch (err) {}
+        } catch (err) { }
     },
 
     // ========== MESSAGING ==========
-    loadConversations: async function() {
+    loadConversations: async function () {
         const container = document.getElementById('conversations-list');
         if (!container) return;
         try {
@@ -974,7 +1816,7 @@ const SocialHub = {
             const data = await res.json();
             if (data.success && data.data.length > 0) {
                 container.innerHTML = data.data.map(c => `
-                    <div class="convo-item" onclick="SocialHub.openChat('${c.otherUser?._id || ''}', '${(c.otherUser?.displayName || c.otherUser?.name || '').replace(/'/g, '')}', '${c.otherUser?.avatar || ''}')">
+                    <div class="convo-item" onclick="SocialHub.openChat('${c.otherUser?._id || c.otherUser?.id || ''}', '${(c.otherUser?.displayName || c.otherUser?.name || '').replace(/'/g, '')}', '${c.otherUser?.avatar || ''}')">
                         <img src="${c.otherUser?.avatar || 'assets/default-avatar.svg'}" class="avatar-sm" alt="" onerror="this.src='assets/default-avatar.svg'">
                         <div class="convo-info">
                             <strong>${c.otherUser?.displayName || c.otherUser?.name || 'Người dùng'}</strong>
@@ -986,10 +1828,10 @@ const SocialHub = {
             } else {
                 container.innerHTML = '<p class="empty-state-text">Chưa có cuộc trò chuyện.</p>';
             }
-        } catch (err) {}
+        } catch (err) { }
     },
 
-    openChat: async function(userId, name, avatar) {
+    openChat: async function (userId, name, avatar) {
         this.chatTarget = { userId, name, avatar };
         const drawer = document.getElementById('chat-drawer');
         if (!drawer) return;
@@ -1005,46 +1847,29 @@ const SocialHub = {
                 if (data.data.length === 0) {
                     body.innerHTML = '<div class="chat-empty">Bắt đầu cuộc trò chuyện với <strong>' + name + '</strong></div>';
                 } else {
-                    body.innerHTML = data.data.map(m => `
-                        <div class="chat-msg ${m.senderId === this.user._id || m.senderId?.toString() === this.user._id ? 'sent' : 'received'}">
+                    body.innerHTML = data.data.map(m => {
+                        const myId = this.user?._id || this.user?.id;
+                        const isSent = myId && (m.senderId === myId || m.senderId?.toString() === myId);
+                        return `
+                        <div class="chat-msg ${isSent ? 'sent' : 'received'}">
                             <p>${m.text}</p>
                             <span class="msg-time">${this.formatTime(m.createdAt)}</span>
-                        </div>
-                    `).join('');
+                        </div>`;
+                    }).join('');
                 }
                 body.scrollTop = body.scrollHeight;
             }
         } catch (err) { body.innerHTML = '<p class="chat-error">Lỗi tải tin nhắn.</p>'; }
 
-        // Start polling
-        if (this.chatPollingInterval) clearInterval(this.chatPollingInterval);
-        this.chatPollingInterval = setInterval(() => this.refreshChatMessages(), 3000);
+        // REMOVED: Polling is no longer needed thanks to Socket.io
     },
 
-    refreshChatMessages: async function() {
-        if (!this.chatTarget) return;
-        const body = document.getElementById('chat-messages');
-        if (!body) return;
-        try {
-            const res = await fetch(`/api/social/messages/${this.chatTarget.userId}`, { headers: { 'x-auth-token': localStorage.getItem('wander_token') } });
-            const data = await res.json();
-            if (data.success && data.data.length > 0) {
-                const currentCount = body.querySelectorAll('.chat-msg').length;
-                if (data.data.length > currentCount) {
-                    const isScrolledToBottom = body.scrollHeight - body.clientHeight <= body.scrollTop + 50;
-                    body.innerHTML = data.data.map(m => `
-                        <div class="chat-msg ${m.senderId === this.user._id || m.senderId?.toString() === this.user._id ? 'sent' : 'received'}">
-                            <p>${m.text}</p>
-                            <span class="msg-time">${this.formatTime(m.createdAt)}</span>
-                        </div>
-                    `).join('');
-                    if (isScrolledToBottom) body.scrollTop = body.scrollHeight;
-                }
-            }
-        } catch (err) {}
+    // Polling is deprecated, kept as fallback or removed
+    refreshChatMessages: async function () {
+        // No longer used in socket mode
     },
 
-    closeChat: function() {
+    closeChat: function () {
         document.getElementById('chat-drawer')?.classList.remove('open');
         this.chatTarget = null;
         if (this.chatPollingInterval) {
@@ -1053,7 +1878,7 @@ const SocialHub = {
         }
     },
 
-    sendMessage: async function() {
+    sendMessage: async function () {
         if (!this.chatTarget) return;
         const input = document.getElementById('chat-input');
         const text = input?.value?.trim();
@@ -1063,20 +1888,20 @@ const SocialHub = {
         const body = document.getElementById('chat-messages');
         const emptyMsg = body.querySelector('.chat-empty, .chat-loading');
         if (emptyMsg) emptyMsg.remove();
-        
+
         const msgDiv = document.createElement('div');
         msgDiv.className = 'chat-msg sent';
         msgDiv.innerHTML = `<p>${text}</p><span class="msg-time">Vừa xong</span>`;
         body.appendChild(msgDiv);
         body.scrollTop = body.scrollHeight;
-        
+
         try {
             await fetch('/api/social/messages/send', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-auth-token': localStorage.getItem('wander_token') }, body: JSON.stringify({ recipientId: this.chatTarget.userId, text }) });
-        } catch (err) {}
+        } catch (err) { }
     },
 
     // ========== FRIEND SUGGESTIONS ==========
-    loadFriendSuggestions: async function() {
+    loadFriendSuggestions: async function () {
         const container = document.getElementById('friend-recommendations');
         if (!container) return;
         try {
@@ -1099,22 +1924,22 @@ const SocialHub = {
         } catch (err) { container.innerHTML = '<p class="empty-state-text">Lỗi tải đề xuất.</p>'; }
     },
 
-    sendFriendRequest: async function(userId, btn) {
+    sendFriendRequest: async function (userId, btn) {
         try {
             const res = await fetch('/api/social/friends/request', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-auth-token': localStorage.getItem('wander_token') }, body: JSON.stringify({ recipientId: userId }) });
             const data = await res.json();
-            if (data.success) { 
-                btn.textContent = 'Đã gửi'; 
-                btn.disabled = true; 
+            if (data.success) {
+                btn.textContent = 'Đã gửi';
+                btn.disabled = true;
                 btn.style.opacity = '0.6';
-            } else { 
-                alert(data.message || 'Lỗi!'); 
+            } else {
+                alert(data.message || 'Lỗi!');
             }
         } catch (err) { alert('Lỗi gửi lời mời!'); }
     },
 
     // ========== UTILS ==========
-    formatTime: function(dateStr) {
+    formatTime: function (dateStr) {
         if (!dateStr) return '';
         const date = new Date(dateStr);
         const now = new Date();
@@ -1124,6 +1949,220 @@ const SocialHub = {
         if (diff < 86400) return Math.floor(diff / 3600) + ' giờ trước';
         if (diff < 604800) return Math.floor(diff / 86400) + ' ngày trước';
         return date.toLocaleDateString('vi-VN');
+    },
+
+    // === GLOBAL SEARCH SYSTEM ===
+    performGlobalSearch: async function (query) {
+        const resultsEl = document.getElementById('search-results');
+        if (!resultsEl) return;
+
+        if (!query || query.length < 2) {
+            this.showSearchSuggestions();
+            return;
+        }
+
+        resultsEl.style.display = 'block';
+        resultsEl.innerHTML = '<div class="search-loading">Đang tìm kiếm...</div>';
+
+        try {
+            const res = await fetch(`/api/social/search?q=${encodeURIComponent(query)}`, {
+                headers: { 'x-auth-token': localStorage.getItem('wander_token') }
+            });
+            const data = await res.json();
+            if (data.success) {
+                this.renderSearchResults(data.data);
+            } else {
+                console.error("Search API Error:", data.message);
+                resultsEl.innerHTML = `<div class="search-error">Lỗi tìm kiếm: ${data.message || 'Không xác định'}</div>`;
+            }
+        } catch (e) {
+            console.error("Search Fetch Error:", e);
+            resultsEl.innerHTML = '<div class="search-error">Không tìm thấy kết quả hoặc lỗi kết nối</div>';
+        }
+    },
+
+    saveSearchHistory: function (query) {
+        if (!query || query.trim().length < 2) return;
+        query = query.trim();
+        let history = JSON.parse(localStorage.getItem('wander_search_history') || '[]');
+        history = history.filter(q => q.toLowerCase() !== query.toLowerCase()); // Remove duplicates
+        history.unshift(query);
+        if (history.length > 5) history = history.slice(0, 5); // Keep last 5
+        localStorage.setItem('wander_search_history', JSON.stringify(history));
+    },
+
+    clearSearchHistory: function (e) {
+        if (e) e.stopPropagation();
+        localStorage.removeItem('wander_search_history');
+        this.showSearchSuggestions();
+    },
+
+    showSearchSuggestions: function () {
+        const resultsEl = document.getElementById('search-results');
+        if (!resultsEl) return;
+
+        resultsEl.style.display = 'block';
+
+        let historyHtml = '';
+        const history = JSON.parse(localStorage.getItem('wander_search_history') || '[]');
+        if (history.length > 0) {
+            historyHtml = `
+                <div class="search-suggestion-header">
+                    <span>Lịch sử tìm kiếm</span>
+                    <button class="btn-clear-history" onclick="SocialHub.clearSearchHistory(event)">Xóa</button>
+                </div>
+            `;
+            history.forEach(q => {
+                historyHtml += `<div class="search-suggestion-item" onclick="SocialHub.openFullSearch('${q.replace(/'/g, "\\'")}')"><i class="fas fa-history"></i> ${q}</div>`;
+            });
+        }
+
+        resultsEl.innerHTML = historyHtml + `
+            <div class="search-suggestion-header">Gợi ý khám phá</div>
+            <div class="search-suggestion-item" onclick="SocialHub.openFullSearch('Đà Lạt')"><i class="fas fa-fire"></i> Đà Lạt</div>
+            <div class="search-suggestion-item" onclick="SocialHub.openFullSearch('Hà Giang')"><i class="fas fa-fire"></i> Hà Giang Loop</div>
+            <div class="search-suggestion-item" onclick="SocialHub.openFullSearch('Phú Quốc')"><i class="fas fa-fire"></i> Phú Quốc</div>
+        `;
+    },
+
+    renderSearchResults: function (results) {
+        const resultsEl = document.getElementById('search-results');
+        if (!resultsEl) return;
+
+        if (results.length === 0) {
+            resultsEl.innerHTML = '<div class="search-no-results">Không tìm thấy gì phù hợp</div>';
+            return;
+        }
+
+        const groups = {
+            user: { title: 'Người dùng', icon: 'fa-user' },
+            post: { title: 'Bài viết & Địa điểm', icon: 'fa-newspaper' },
+            community: { title: 'Hội nhóm', icon: 'fa-users' }
+        };
+
+        let html = '';
+        Object.entries(groups).forEach(([type, info]) => {
+            const items = results.filter(r => r.type === type);
+            if (items.length > 0) {
+                html += `<div class="search-group-title"><i class="fas ${info.icon}"></i> ${info.title}</div>`;
+                items.forEach(item => {
+                    html += `
+                        <div class="search-result-item" onclick="SocialHub.handleSearchResultClick('${item.type}', '${item.id}')">
+                            <img src="${item.avatar || 'assets/default-avatar.svg'}" alt="" onerror="this.src='assets/default-avatar.svg'">
+                            <div class="result-info">
+                                <b>${item.title}</b>
+                                <span>${item.subtitle}</span>
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+        });
+
+        resultsEl.innerHTML = html;
+    },
+
+    handleSearchResultClick: function (type, id) {
+        if (type === 'user') {
+            this.viewProfile(id);
+        } else if (type === 'post') {
+            // logic to open a modal with the post
+            if (window.WanderUI) WanderUI.showToast('Đang mở bài viết...', 'info');
+        } else if (type === 'community') {
+            this.viewCommunity(id);
+        } else if (type === 'destination') {
+            window.location.href = `destination-detail.html?id=${id}`;
+        }
+        document.getElementById('search-results').style.display = 'none';
+    },
+
+    openFullSearch: async function (query) {
+        if (!query || query.length < 2) return;
+        this.saveSearchHistory(query);
+        this.switchTab('search');
+        document.getElementById('search-query-display').textContent = query;
+        const container = document.getElementById('full-search-results');
+        container.innerHTML = '<div class="search-loading">Đang tìm kiếm chuyên sâu...</div>';
+
+        try {
+            const res = await fetch(`/api/social/search?q=${encodeURIComponent(query)}`, {
+                headers: { 'x-auth-token': localStorage.getItem('wander_token') }
+            });
+            const data = await res.json();
+            if (data.success) {
+                this.renderFullSearchResults(data.data);
+            }
+        } catch (e) {
+            container.innerHTML = '<div class="search-error">Lỗi kết nối</div>';
+        }
+    },
+
+    renderFullSearchResults: function (results) {
+        this.currentFullSearchResults = results || [];
+        this.filterSearchResults('all');
+    },
+
+    filterSearchResults: function (filterType) {
+        const container = document.getElementById('full-search-results');
+        if (!container) return;
+
+        // Cập nhật giao diện các nút tab
+        document.querySelectorAll('.s-filter-btn').forEach(btn => {
+            if (btn.dataset.filter === filterType) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+
+        const results = this.currentFullSearchResults || [];
+
+        if (results.length === 0) {
+            container.innerHTML = '<div class="search-no-results">Không tìm thấy kết quả nào</div>';
+            return;
+        }
+
+        const sections = [
+            { type: 'destination', title: 'Điểm đến du lịch', icon: 'fa-map-marked-alt' },
+            { type: 'user', title: 'Mọi người', icon: 'fa-user-friends' },
+            { type: 'post', title: 'Bài viết & Địa điểm check-in', icon: 'fa-images' },
+            { type: 'community', title: 'Hội nhóm & Cộng đồng', icon: 'fa-users' }
+        ];
+
+        let html = '';
+        sections.forEach(sec => {
+            if (filterType !== 'all' && sec.type !== filterType) return; // Skip if filtered
+
+            const items = results.filter(r => r.type === sec.type);
+            if (items.length > 0) {
+                html += `
+                    <div class="full-search-section">
+                        <h3 class="section-title"><i class="fas ${sec.icon}"></i> ${sec.title}</h3>
+                        <div class="results-grid ${sec.type === 'post' ? 'posts-col' : ''}">
+                            ${items.map(item => `
+                                <div class="full-result-card" onclick="SocialHub.handleSearchResultClick('${item.type}', '${item.id}')">
+                                    <div class="res-avatar-wrap">
+                                        <img src="${item.avatar || 'assets/default-avatar.svg'}" alt="" onerror="this.src='assets/default-avatar.svg'">
+                                        ${item.type === 'user' ? '<div class="online-indicator"></div>' : ''}
+                                    </div>
+                                    <div class="res-content">
+                                        <h4>${item.title}</h4>
+                                        <p>${item.subtitle}</p>
+                                        ${item.type === 'destination' ? '<button class="btn-visit">Xem điểm đến</button>' : ''}
+                                        ${item.type === 'community' ? '<button class="btn-join">Tham gia</button>' : ''}
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+        });
+
+        if (!html) {
+            html = '<div class="search-no-results">Không tìm thấy kết quả nào trong mục này</div>';
+        }
+        container.innerHTML = html;
     }
 };
 

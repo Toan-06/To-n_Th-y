@@ -41,6 +41,24 @@ const generateCustomId = (roleOrKind) => {
   return `${prefix}${randomNum}`;
 };
 
+// Memory cache for authenticated users to avoid DB lookup on every request
+const authCache = new Map();
+const AUTH_CACHE_TTL = 60 * 1000; // 1 minute cache
+
+function getFromCache(id, portal) {
+  const key = `${portal}_${id}`;
+  const entry = authCache.get(key);
+  if (entry && Date.now() - entry.timestamp < AUTH_CACHE_TTL) {
+    return entry.user;
+  }
+  return null;
+}
+
+function setInCache(id, portal, user) {
+  const key = `${portal}_${id}`;
+  authCache.set(key, { user, timestamp: Date.now() });
+}
+
 const verifyPortalToken = (expectedPortal) => async (req, res, next) => {
   const token = req.header('x-auth-token');
   if (!token || token === 'null' || token === 'undefined') {
@@ -70,8 +88,15 @@ const verifyPortalToken = (expectedPortal) => async (req, res, next) => {
       return res.status(403).json({ success: false, message: `Auth: Portal mismatch (Expected ${expectedPortal}, got ${account.portal})` });
     }
 
+    // Try cache first
+    const cachedUser = getFromCache(accountId, account.portal || expectedPortal || 'user');
+    if (cachedUser) {
+      req.user = cachedUser;
+      return next();
+    }
+
     const modelMap = { 'user': User, 'business': BusinessAccount, 'admin': AdminAccount };
-    const Model = modelMap[account.portal || expectedPortal];
+    const Model = modelMap[account.portal || expectedPortal || 'user'];
     
     if (Model) {
       const query = {
@@ -84,22 +109,24 @@ const verifyPortalToken = (expectedPortal) => async (req, res, next) => {
         query.$or.push({ _id: accountId });
       }
 
-      const accountData = await Model.findOne(query);
+      const accountData = await Model.findOne(query).lean(); // Use lean for speed
       if (!accountData) {
         console.warn(`Auth: Account ${accountId} not found in ${account.portal || expectedPortal}`);
         return res.status(401).json({ success: false, message: 'Auth: Account not found in DB' });
       }
       
+      // Update lastActive less frequently (every 15 mins instead of 5)
       const now = new Date();
       const lastActive = accountData.lastActive || new Date(0);
-      if (now - lastActive > 5 * 60 * 1000) {
-        accountData.lastActive = now;
-        await accountData.save();
+      if (now - lastActive > 15 * 60 * 1000) {
+        Model.updateOne({ _id: accountData._id }, { $set: { lastActive: now } }).exec().catch(() => {});
       }
 
       if (accountData.status === 'suspended') return res.status(403).json({ success: false, message: 'Auth: Account suspended' });
       
       req.user = {
+        _id: accountData._id.toString(),
+        customId: accountData.customId || accountData.id,
         id: accountData.customId || accountData.id || accountData._id.toString(),
         email: accountData.email,
         role: accountData.role || (account.portal === 'admin' ? 'admin' : account.portal),
@@ -107,10 +134,18 @@ const verifyPortalToken = (expectedPortal) => async (req, res, next) => {
         displayName: accountData.displayName || accountData.name,
         name: accountData.name,
         avatar: accountData.avatar || '',
-        portal: account.portal || expectedPortal
+        portal: account.portal || expectedPortal || 'user',
+        points: accountData.points || 0,
+        rank: accountData.rank || 'Đồng',
+        rankTier: accountData.rankTier || 'I',
+        claimedQuests: accountData.claimedQuests || []
       };
+      
+      setInCache(accountId, account.portal || expectedPortal || 'user', req.user);
     } else {
       req.user = {
+        _id: account._id || account.id,
+        customId: account.customId || account.id,
         id: accountId,
         email: account.email,
         role: account.role,
@@ -197,7 +232,20 @@ router.post('/user/register', async (req, res) => {
     await user.save();
     const token = signPortalToken(user, 'user', 'user');
     await logAction(user.email, 'user', 'USER_REGISTER', { user: { id: user.id, email: user.email, displayName: user.name, role: user.role } }, req.ip, req.headers['user-agent']);
-    res.json({ success: true, token, user: { id: user.id, email: user.email, name: user.name, role: 'user', avatar: user.avatar, status: user.status } });
+    res.json({ 
+      success: true, 
+      token, 
+      user: { 
+        _id: user._id.toString(),
+        customId: user.customId || user.id,
+        id: user.customId || user.id || user._id.toString(), 
+        email: user.email, 
+        name: user.name, 
+        role: user.role || 'user', 
+        avatar: user.avatar, 
+        status: user.status 
+      } 
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -214,7 +262,20 @@ router.post('/user/login', async (req, res) => {
     if (!isMatch) return res.status(400).json({ success: false, message: 'Email hoặc mật khẩu không đúng' });
     const token = signPortalToken(user, 'user', 'user');
     await logAction(user.email, 'user', 'USER_LOGIN', { user: { id: user.id, email: user.email, displayName: user.displayName || user.name, role: user.role } }, req.ip, req.headers['user-agent']);
-    res.json({ success: true, token, user: { id: user.id, email: user.email, name: user.name, role: 'user', avatar: user.avatar, status: user.status } });
+    res.json({ 
+      success: true, 
+      token, 
+      user: { 
+        _id: user._id.toString(),
+        customId: user.customId || user.id,
+        id: user.customId || user.id || user._id.toString(), 
+        email: user.email, 
+        name: user.name, 
+        role: user.role || 'user', 
+        avatar: user.avatar, 
+        status: user.status 
+      } 
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -222,15 +283,9 @@ router.post('/user/login', async (req, res) => {
 
 router.get('/user/me', auth, async (req, res) => {
   try {
-    const user = await User.findOne({
-      $or: [
-        { customId: req.user.id },
-        { id: req.user.id },
-        { _id: mongoose.Types.ObjectId.isValid(req.user.id) ? req.user.id : new mongoose.Types.ObjectId() }
-      ]
-    }).select('-password');
-    if (!user) return res.status(404).json({ success: false, message: 'Người dùng không tồn tại' });
-    res.json({ success: true, user });
+    // req.user is already populated by auth middleware
+    res.setHeader('Cache-Control', 'no-cache');
+    res.json({ success: true, user: req.user });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -239,30 +294,32 @@ router.get('/user/me', auth, async (req, res) => {
 // Lấy thông tin rank của user (Unified endpoint)
 router.get('/user/rank', auth, async (req, res) => {
   try {
-    const user = await User.findOne({
+    // Lấy bản ghi mới nhất từ DB để đảm bảo chính xác XP/Rank
+    const accountData = await User.findOne({
       $or: [
         { customId: req.user.id },
         { id: req.user.id },
-        { _id: mongoose.Types.ObjectId.isValid(req.user.id) ? req.user.id : new mongoose.Types.ObjectId() }
+        ...(mongoose.Types.ObjectId.isValid(req.user.id) ? [{ _id: req.user.id }] : [])
       ]
-    });
-    if (!user) return res.status(404).json({ success: false, message: 'User not found for rank' });
-    
-    // Ensure rank info exists
-    const rankInfo = calculateRank(user.points || 0);
+    }).lean();
+
+    if (!accountData) return res.status(404).json({ success: false, message: 'User not found in DB' });
+
+    const points = accountData.points || 0;
+    const rankInfo = calculateRank(points);
     
     res.json({
       success: true,
-      points: user.points || 0,
-      rank: user.rank || rankInfo.rank,
-      rankTier: user.rankTier || rankInfo.tier,
+      points: points,
+      rank: accountData.rank || rankInfo.rank,
+      rankTier: accountData.rankTier || rankInfo.tier,
       nextThreshold: rankInfo.nextThreshold || null,
-      claimedQuests: user.claimedQuests || [],
-      avatar: user.avatar || '',
-      displayName: user.displayName || user.name || 'Thành viên',
-      name: user.name || '',
-      email: user.email || '',
-      customId: user.customId || user._id.toString()
+      claimedQuests: accountData.claimedQuests || [],
+      avatar: accountData.avatar || '',
+      displayName: accountData.displayName || accountData.name || 'Thành viên',
+      name: accountData.name || '',
+      email: accountData.email || '',
+      customId: accountData.customId || accountData.id
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -276,7 +333,7 @@ router.get('/user/activity', auth, async (req, res) => {
       $or: [
         { customId: req.user.id },
         { id: req.user.id },
-        { _id: mongoose.Types.ObjectId.isValid(req.user.id) ? req.user.id : new mongoose.Types.ObjectId() }
+        ...(mongoose.Types.ObjectId.isValid(req.user.id) ? [{ _id: req.user.id }] : [])
       ]
     });
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
@@ -306,7 +363,20 @@ router.post('/business/register', async (req, res) => {
     await account.save();
     await logAction(account.email, 'business', 'BUSINESS_REGISTER', { email: account.email, id: account._id }, req.ip, req.headers['user-agent']);
     const token = signPortalToken(account, 'business', 'business');
-    res.json({ success: true, token, user: { id: account.id, email: account.email, name: account.name, role: 'business', status: account.status, avatar: account.avatar } });
+    res.json({ 
+      success: true, 
+      token, 
+      user: { 
+        _id: account._id.toString(),
+        customId: account.customId || account.id,
+        id: account.id, 
+        email: account.email, 
+        name: account.name, 
+        role: 'business', 
+        status: account.status, 
+        avatar: account.avatar 
+      } 
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -333,7 +403,20 @@ router.post('/business/login', async (req, res) => {
     if (!matchedAccount) return res.status(400).json({ success: false, message: 'Email hoặc mật khẩu không đúng' });
     const token = signPortalToken(matchedAccount, 'business', 'business');
     await logAction(matchedAccount.email, 'business', 'BUSINESS_LOGIN', { email: matchedAccount.email, id: matchedAccount._id }, req.ip, req.headers['user-agent']);
-    res.json({ success: true, token, user: { id: matchedAccount.id, email: matchedAccount.email, name: matchedAccount.name, role: 'business', status: matchedAccount.status, avatar: matchedAccount.avatar } });
+    res.json({ 
+      success: true, 
+      token, 
+      user: { 
+        _id: matchedAccount._id.toString(),
+        customId: matchedAccount.customId || matchedAccount.id,
+        id: matchedAccount.id, 
+        email: matchedAccount.email, 
+        name: matchedAccount.name, 
+        role: 'business', 
+        status: matchedAccount.status, 
+        avatar: matchedAccount.avatar 
+      } 
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -345,7 +428,7 @@ router.get('/business/me', businessAuth, async (req, res) => {
       $or: [
         { customId: req.user.id },
         { id: req.user.id },
-        { _id: mongoose.Types.ObjectId.isValid(req.user.id) ? req.user.id : new mongoose.Types.ObjectId() }
+        ...(mongoose.Types.ObjectId.isValid(req.user.id) ? [{ _id: req.user.id }] : [])
       ]
     }).select('-password');
     if (!account) return res.status(404).json({ success: false, message: 'Tài khoản doanh nghiệp không tồn tại' });
@@ -423,7 +506,7 @@ router.get('/admin/me', adminTokenAuth, async (req, res) => {
       $or: [
         { customId: req.user.id },
         { id: req.user.id },
-        { _id: mongoose.Types.ObjectId.isValid(req.user.id) ? req.user.id : new mongoose.Types.ObjectId() }
+        ...(mongoose.Types.ObjectId.isValid(req.user.id) ? [{ _id: req.user.id }] : [])
       ]
     }).select('-password');
     if (!account) return res.status(404).json({ success: false, message: 'Tài khoản admin không tồn tại' });
@@ -448,7 +531,7 @@ router.get('/me', auth, async (req, res) => {
       $or: [
         { customId: req.user.id },
         { id: req.user.id },
-        { _id: mongoose.Types.ObjectId.isValid(req.user.id) ? req.user.id : new mongoose.Types.ObjectId() }
+        ...(mongoose.Types.ObjectId.isValid(req.user.id) ? [{ _id: req.user.id }] : [])
       ]
     }).select('-password');
     if (!user) return res.status(404).json({ success: false, message: 'Người dùng không tồn tại' });
@@ -510,7 +593,7 @@ router.post('/user/add-xp', auth, async (req, res) => {
       $or: [
         { customId: req.user.id },
         { id: req.user.id },
-        { _id: mongoose.Types.ObjectId.isValid(req.user.id) ? req.user.id : new mongoose.Types.ObjectId() }
+        ...(mongoose.Types.ObjectId.isValid(req.user.id) ? [{ _id: req.user.id }] : [])
       ]
     });
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
@@ -529,6 +612,15 @@ router.post('/user/add-xp', auth, async (req, res) => {
     user.rankTier = current.tier;
 
     await user.save();
+    
+    // Invalidate session cache
+    const portal = 'user';
+    const cacheId = user.customId || user.id || user._id.toString();
+    authCache.delete(`${portal}_${cacheId}`);
+    authCache.delete(`${portal}_${user._id.toString()}`);
+    
+    // Invalidate leaderboard cache
+    lastLeaderboardCache = 0;
     
     // Log hoạt động
     await logAction(user.email, user.role, 'USER_XP_ADDED', { xp, questId, reason, newPoints: user.points }, req.ip, req.headers['user-agent']);
@@ -554,7 +646,7 @@ router.put('/profile', auth, async (req, res) => {
       $or: [
         { customId: req.user.id },
         { id: req.user.id },
-        { _id: mongoose.Types.ObjectId.isValid(req.user.id) ? req.user.id : new mongoose.Types.ObjectId() }
+        ...(mongoose.Types.ObjectId.isValid(req.user.id) ? [{ _id: req.user.id }] : [])
       ]
     });
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
@@ -588,7 +680,7 @@ router.put('/password', auth, async (req, res) => {
       $or: [
         { customId: req.user.id },
         { id: req.user.id },
-        { _id: mongoose.Types.ObjectId.isValid(req.user.id) ? req.user.id : new mongoose.Types.ObjectId() }
+        ...(mongoose.Types.ObjectId.isValid(req.user.id) ? [{ _id: req.user.id }] : [])
       ]
     });
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
@@ -612,13 +704,29 @@ router.put('/password', auth, async (req, res) => {
   }
 });
 
+// Cache for leaderboard
+let cachedLeaderboard = null;
+let lastLeaderboardCache = 0;
+const LB_CACHE_TTL = 1 * 60 * 1000; // 1 minute
+
 // Lấy bảng xếp hạng người dùng
 router.get('/leaderboard', async (req, res) => {
   try {
+    const now = Date.now();
+    if (cachedLeaderboard && (now - lastLeaderboardCache < LB_CACHE_TTL)) {
+      return res.json({ success: true, leaderboard: cachedLeaderboard });
+    }
+
     const leaderboard = await User.find({ role: 'user' })
       .select('name displayName avatar points rank rankTier')
       .sort({ points: -1 })
-      .limit(100);
+      .limit(100)
+      .lean();
+      
+    cachedLeaderboard = leaderboard;
+    lastLeaderboardCache = now;
+    
+    res.setHeader('Cache-Control', 'no-cache');
     res.json({ success: true, leaderboard });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Lỗi tải bảng xếp hạng' });
@@ -632,7 +740,7 @@ router.get('/user/stats', auth, async (req, res) => {
       $or: [
         { customId: req.user.id },
         { id: req.user.id },
-        { _id: mongoose.Types.ObjectId.isValid(req.user.id) ? req.user.id : new mongoose.Types.ObjectId() }
+        ...(mongoose.Types.ObjectId.isValid(req.user.id) ? [{ _id: req.user.id }] : [])
       ]
     });
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
@@ -708,7 +816,7 @@ router.post('/user/sync-favorites', auth, async (req, res) => {
       $or: [
         { customId: req.user.id },
         { id: req.user.id },
-        { _id: mongoose.Types.ObjectId.isValid(req.user.id) ? req.user.id : new mongoose.Types.ObjectId() }
+        ...(mongoose.Types.ObjectId.isValid(req.user.id) ? [{ _id: req.user.id }] : [])
       ]
     });
     if (!user) return res.status(404).json({ success: false, message: 'Người dùng không tồn tại' });
@@ -815,3 +923,4 @@ router.post('/reset-password/:token', async (req, res) => {
 });
 
 module.exports = { router, auth, businessAuth, adminTokenAuth, sharedAuth, verifyPortalToken, signPortalToken, generateCustomId };
+

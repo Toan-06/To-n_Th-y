@@ -40,24 +40,45 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
     document.querySelectorAll('.modal').forEach(m => closeModal(m));
   };
 
-  window.fetch = async function(...args) {
-    const response = await originalFetch.apply(this, args);
+  window.fetch = async function (...args) {
     const url = typeof args[0] === 'string' ? args[0] : (args[0] && args[0].url ? args[0].url : '');
-    
-    try {
-      if (url.includes('/login') || url.includes('/register') || url.includes('/create')) {
-        return response;
-      }
-      const clone = response.clone();
-      const data = await clone.json();
-      if (response.status === 403 && data && data.message && data.message.includes('bị khóa')) {
-        showSuspendedModal();
-      }
-      if (response.status === 401 && !url.includes('/login') && !url.includes('/register')) {
-        localStorage.removeItem('wander_token');
-        localStorage.removeItem('wander_admin_token');
-      }
-    } catch(e) { }
+
+    // Big-Tech Pattern: Check prefetch cache first (Skip for dynamic user state)
+    const cacheKey = 'wv_prefetch_' + url;
+    const isDynamic = url.includes('/api/auth/user/rank') || url.includes('/api/auth/me');
+    const cached = isDynamic ? null : sessionStorage.getItem(cacheKey);
+    if (cached) {
+      try {
+        const { data, timestamp } = JSON.parse(cached);
+        if (Date.now() - timestamp < 15000) { // 15s fresh
+          console.log(`🎯 Fast-Path: Using prefetched data for ${url}`);
+          // Don't remove immediately to allow multiple consumption if needed (e.g. stats)
+          return new Response(JSON.stringify(data), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json', 'x-prefetched': 'true' }
+          });
+        }
+      } catch (e) { }
+    }
+
+    const response = await originalFetch.apply(this, args);
+
+    if (response.status === 403 || response.status === 401) {
+      try {
+        const clone = response.clone();
+        const data = await clone.json();
+
+        if (response.status === 403 && data && data.message && data.message.includes('bị khóa')) {
+          showSuspendedModal();
+        }
+
+        if (response.status === 401 && !url.includes('/login') && !url.includes('/register')) {
+          localStorage.removeItem('wander_token');
+          localStorage.removeItem('wander_admin_token');
+        }
+      } catch (e) { /* ignore parse error */ }
+    }
+
     return response;
   };
 
@@ -164,7 +185,7 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
         return;
       }
       const json = await res.json();
-      
+
       // Show toast if count increased
       if (lastNotifCount !== -1 && json.count > lastNotifCount) {
         WanderUI.showToast('Bạn có thông báo mới!', 'info');
@@ -262,10 +283,10 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
   }
 
   async function markAllAsRead() {
-     const token = localStorage.getItem('wander_token') || localStorage.getItem('wander_admin_token');
-     await fetch('/api/notifications/read-all', { method: 'POST', headers: { 'x-auth-token': token } });
-     renderNotifications();
-     updateNotificationBadge();
+    const token = localStorage.getItem('wander_token') || localStorage.getItem('wander_admin_token');
+    await fetch('/api/notifications/read-all', { method: 'POST', headers: { 'x-auth-token': token } });
+    renderNotifications();
+    updateNotificationBadge();
   }
 
   async function renderNotifications() {
@@ -336,7 +357,7 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
       }
       data[key] = Math.max(data[key] || 0, value || 1);
       localStorage.setItem(storeKey, JSON.stringify(data));
-    } catch(e) {}
+    } catch (e) { }
   }
 
   function getQuestActivity(key) {
@@ -347,7 +368,7 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
       var today = new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
       if (data.date !== today) return 0;
       return data[key] || 0;
-    } catch(e) { return 0; }
+    } catch (e) { return 0; }
   }
 
   // ─── Auth Sync ──────────────────────────────────────────────────
@@ -390,7 +411,7 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
       const padding = '='.repeat((4 - base64.length % 4) % 4);
       const payload = JSON.parse(decodeURIComponent(escape(atob(base64 + padding))));
       const u = payload.user || payload.account || payload;
-      
+
       authBtns.forEach(el => el.style.display = "none");
       profileTrays.forEach(el => { el.style.display = "flex"; el.removeAttribute('hidden'); });
 
@@ -422,7 +443,7 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
         `;
       }
 
-      fetch('/api/auth/user/rank', { headers: { 'x-auth-token': token } })
+      fetch('/api/auth/user/rank?t=' + Date.now(), { headers: { 'x-auth-token': token } })
         .then(r => {
           if (r.status === 401) {
             // Token invalid or expired - clear it to avoid console spam
@@ -435,7 +456,7 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
           if (data && data.success) {
             const fullDis = data.displayName || data.name || initialName;
             if (userNameEl) {
-               userNameEl.innerHTML = `
+              userNameEl.innerHTML = `
                  <div style="display:flex; flex-direction:column; line-height:1.2;">
                    <span style="font-weight:700; color:#fff; font-size:0.95rem;">${fullDis.replace(/</g, '&lt;')}</span>
                    <span style="font-size:0.7rem; color:var(--text-muted); opacity:0.8;">${data.customId || ""}</span>
@@ -458,35 +479,35 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
         }).catch(err => console.error("Auth sync API error:", err));
 
     } catch (e) { console.error("Auth sync error", e); }
-    
-    // Add event listeners for dynamic dropdown items
-    document.addEventListener('click', (e) => {
-      if (e.target.closest('[data-open-profile]')) {
-        window.location.href = 'profile.html';
-      }
-      if (e.target.closest('[data-logout-btn]')) {
-        WanderUI.forceLogout();
-      }
-      if (e.target.closest('[data-open-activity]')) {
-        WanderUI.openModal('activity-stats');
-      }
-    });
   }
 
-    const page = (window.location.pathname.split('/').pop() || 'index.html').toLowerCase();
-    const isExplorer = page === 'index.html' || page === '';
-    const isSocial = page.includes('social');
-    const isServices = page.includes('leaderboard') || page.includes('voucher') || page.includes('services');
-    const isQuests = page.includes('quests');
-    const isHistory = page.includes('history');
+  // Big-Tech: One-time global listener for auth-related actions
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('[data-open-profile]')) {
+      window.location.href = 'profile.html';
+    }
+    if (e.target.closest('[data-logout-btn]')) {
+      WanderUI.forceLogout();
+    }
+    if (e.target.closest('[data-open-activity]')) {
+      WanderUI.openModal('activity-stats');
+    }
+  });
 
-    function injectHeader() {
-      console.log("🛠️ WanderUI: Injecting Header...");
-      const container = document.getElementById('header-container') || document.querySelector('[data-header]') || document.querySelector('.site-header') || document.querySelector('header');
-      if (!container) {
-        console.error("❌ WanderUI: Header container NOT found!");
-        return;
-      }
+  const page = (window.location.pathname.split('/').pop() || 'index.html').toLowerCase();
+  const isExplorer = page === 'index.html' || page === '';
+  const isSocial = page.includes('social');
+  const isServices = page.includes('leaderboard') || page.includes('voucher') || page.includes('services');
+  const isQuests = page.includes('quests');
+  const isHistory = page.includes('history');
+
+  function injectHeader() {
+    console.log("🛠️ WanderUI: Injecting Header...");
+    const container = document.getElementById('header-container') || document.querySelector('[data-header]') || document.querySelector('.site-header') || document.querySelector('header');
+    if (!container) {
+      console.error("❌ WanderUI: Header container NOT found!");
+      return;
+    }
 
     container.innerHTML = `
       <div class="header-inner">
@@ -569,25 +590,25 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
     const updateActive = () => {
       const fullPath = (window.location.pathname.split('/').pop() || 'index.html').toLowerCase();
       const hash = window.location.hash.toLowerCase();
-      
+
       navLinks.forEach(link => {
         const href = (link.getAttribute('href') || '').toLowerCase();
         let isCurrent = false;
-        
+
         if (href.includes('#')) {
           const [hPage, hHash] = href.split('#');
           // If on index.html and link is index.html#hash or just #hash
           if ((fullPath === 'index.html' || fullPath === '') && (hPage === 'index.html' || hPage === '')) {
-             isCurrent = hash === ('#' + hHash);
+            isCurrent = hash === ('#' + hHash);
           }
         } else {
           isCurrent = (href === fullPath) || (fullPath === '' && href === 'index.html');
           // Special case: if we have a hash on index.html, the 'Home' link (index.html) shouldn't be active
           if (isCurrent && fullPath === 'index.html' && hash && href === 'index.html') {
-             isCurrent = false;
+            isCurrent = false;
           }
         }
-        
+
         if (isCurrent) link.classList.add('active');
         else link.classList.remove('active');
       });
@@ -595,13 +616,13 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
 
     updateActive();
     window.addEventListener('hashchange', updateActive);
-    
+
     // Mobile toggle
     const toggle = document.querySelector('[data-nav-toggle]');
     const nav = document.querySelector('[data-nav]');
     const overlay = document.querySelector('[data-nav-overlay]');
     const header = document.querySelector('.site-header');
-    
+
     if (toggle && nav) {
       const closeMenu = () => {
         nav.classList.remove('is-open');
@@ -929,7 +950,7 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
   async function openPlaceDetail(id, localData) {
     const wrap = document.querySelector('[data-place-detail]');
     if (!wrap) return;
-    
+
     wrap.innerHTML = `
       <div class="modal-loading-placeholder animate-in" style="padding:2.5rem;">
         <div class="skeleton" style="width:40%; height:32px; border-radius:8px; margin-bottom:1.5rem;"></div>
@@ -952,8 +973,8 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
       const heroImage = (p.images && p.images.length > 0) ? p.images[0] : (p.image || "");
       let galleryHtml = "";
       if (p.images && p.images.length > 1) {
-        galleryHtml = '<div class="place-detail__gallery">' + p.images.map((img, i) => 
-          `<div class="gallery-thumb${i===0?' is-active':''}" data-full="${img}"><img src="${img}" alt="Thumb"></div>`
+        galleryHtml = '<div class="place-detail__gallery">' + p.images.map((img, i) =>
+          `<div class="gallery-thumb${i === 0 ? ' is-active' : ''}" data-full="${img}"><img src="${img}" alt="Thumb"></div>`
         ).join("") + '</div>';
       }
 
@@ -1072,8 +1093,8 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
     // Helper: format date VN
     function fmtDate(dateStr) {
       const d = new Date(dateStr + 'T00:00:00');
-      const dow = ['CN','T2','T3','T4','T5','T6','T7'][d.getDay()];
-      return `${dow.replace('T','Thứ ').replace('CN','Chủ nhật')}, ${d.getDate().toString().padStart(2,'0')}/${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getFullYear()}`;
+      const dow = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'][d.getDay()];
+      return `${dow.replace('T', 'Thứ ').replace('CN', 'Chủ nhật')}, ${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
     }
 
     // Header summary card
@@ -1389,7 +1410,7 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
       // No longer clear log.innerHTML here to avoid flash if we already have cache
       currentSessionId = sid;
       localStorage.setItem('wander_current_session', sid);
-      
+
       const historyView = document.getElementById('global-chat-sessions-view');
       if (historyView) {
         historyView.classList.remove('is-active');
@@ -1399,87 +1420,87 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
       fetch("/api/chat/history/" + sid, {
         headers: { 'x-auth-token': token || '' }
       })
-      .then(r => r.json())
-      .then(json => {
-        if (json.success && json.messages && json.messages.length > 0) {
-          log.innerHTML = ''; // Only clear if we actually have server data to replace
-          json.messages.forEach(m => {
-            appendMsg(m.text, m.role === 'user' ? 'user' : 'bot');
-          });
-          // Update cache with server truth
-          localStorage.setItem('wander_shared_chat', JSON.stringify(json.messages.map(m => ({
-            role: m.role === 'user' ? 'user' : 'bot',
-            text: m.text
-          }))));
-        }
-      })
-      .catch(() => {
-        log.innerHTML = '';
-        appendMsg('Lỗi kết nối khi tải lịch sử.', 'bot');
-      });
+        .then(r => r.json())
+        .then(json => {
+          if (json.success && json.messages && json.messages.length > 0) {
+            log.innerHTML = ''; // Only clear if we actually have server data to replace
+            json.messages.forEach(m => {
+              appendMsg(m.text, m.role === 'user' ? 'user' : 'bot');
+            });
+            // Update cache with server truth
+            localStorage.setItem('wander_shared_chat', JSON.stringify(json.messages.map(m => ({
+              role: m.role === 'user' ? 'user' : 'bot',
+              text: m.text
+            }))));
+          }
+        })
+        .catch(() => {
+          log.innerHTML = '';
+          appendMsg('Lỗi kết nối khi tải lịch sử.', 'bot');
+        });
     }
 
     function loadChatSessions() {
       const token = localStorage.getItem('wander_token');
       const historyList = document.getElementById('global-chat-sessions-list');
       if (!historyList) return;
-      
+
       if (!token) {
         historyList.innerHTML = '<div class="chat-sessions-loading">Vui lòng đăng nhập để xem lịch sử.</div>';
         return;
       }
       historyList.innerHTML = '<div class="chat-sessions-loading">Đang tải...</div>';
-      
+
       fetch("/api/chat/sessions", {
         headers: { 'x-auth-token': token }
       })
-      .then(r => r.json())
-      .then(json => {
-        if (json.success && json.sessions && json.sessions.length > 0) {
-          historyList.innerHTML = '';
-          json.sessions.forEach(s => {
-            const item = document.createElement('div');
-            item.className = 'chat-session-item';
-            const dateStr = new Date(s.updatedAt).toLocaleDateString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-            item.innerHTML = '<div class="chat-session-item__info">' +
-                               '<div class="chat-session-item__title">' + escapeHtml(s.title || 'Hội thoại du lịch') + '</div>' +
-                               '<div class="chat-session-item__date">' + dateStr + '</div>' +
-                             '</div>' +
-                             '<button type="button" class="btn-delete-session" title="Xóa">🗑️</button>';
-            
-            item.onclick = () => loadChatHistory(s.sessionId);
-            
-            const delBtn = item.querySelector('.btn-delete-session');
-            delBtn.onclick = (e) => {
-              e.stopPropagation();
-              if (confirm('Xóa vĩnh viễn đoạn hội thoại này?')) {
-                fetch('/api/chat/session/' + s.sessionId, {
-                  method: 'DELETE',
-                  headers: { 'x-auth-token': token }
-                })
-                .then(r => r.json())
-                .then(res => {
-                  if (res.success) {
-                    item.remove();
-                    if (currentSessionId === s.sessionId) {
-                      currentSessionId = null;
-                      localStorage.removeItem('wander_current_session');
-                      log.innerHTML = '';
-                      appendMsg('Hội thoại đã bị xóa.', 'bot');
-                    }
-                  }
-                });
-              }
-            };
-            historyList.appendChild(item);
-          });
-        } else {
-          historyList.innerHTML = '<div class="chat-sessions-loading">Chưa có hội thoại nào.</div>';
-        }
-      })
-      .catch(() => {
-        historyList.innerHTML = '<div class="chat-sessions-loading">Lỗi tải lịch sử.</div>';
-      });
+        .then(r => r.json())
+        .then(json => {
+          if (json.success && json.sessions && json.sessions.length > 0) {
+            historyList.innerHTML = '';
+            json.sessions.forEach(s => {
+              const item = document.createElement('div');
+              item.className = 'chat-session-item';
+              const dateStr = new Date(s.updatedAt).toLocaleDateString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+              item.innerHTML = '<div class="chat-session-item__info">' +
+                '<div class="chat-session-item__title">' + escapeHtml(s.title || 'Hội thoại du lịch') + '</div>' +
+                '<div class="chat-session-item__date">' + dateStr + '</div>' +
+                '</div>' +
+                '<button type="button" class="btn-delete-session" title="Xóa">🗑️</button>';
+
+              item.onclick = () => loadChatHistory(s.sessionId);
+
+              const delBtn = item.querySelector('.btn-delete-session');
+              delBtn.onclick = (e) => {
+                e.stopPropagation();
+                if (confirm('Xóa vĩnh viễn đoạn hội thoại này?')) {
+                  fetch('/api/chat/session/' + s.sessionId, {
+                    method: 'DELETE',
+                    headers: { 'x-auth-token': token }
+                  })
+                    .then(r => r.json())
+                    .then(res => {
+                      if (res.success) {
+                        item.remove();
+                        if (currentSessionId === s.sessionId) {
+                          currentSessionId = null;
+                          localStorage.removeItem('wander_current_session');
+                          log.innerHTML = '';
+                          appendMsg('Hội thoại đã bị xóa.', 'bot');
+                        }
+                      }
+                    });
+                }
+              };
+              historyList.appendChild(item);
+            });
+          } else {
+            historyList.innerHTML = '<div class="chat-sessions-loading">Chưa có hội thoại nào.</div>';
+          }
+        })
+        .catch(() => {
+          historyList.innerHTML = '<div class="chat-sessions-loading">Lỗi tải lịch sử.</div>';
+        });
     }
 
     // New Chat Button
@@ -1498,7 +1519,7 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
     const historyBtn = document.getElementById('global-chat-history-btn');
     const historyView = document.getElementById('global-chat-sessions-view');
     const historyClose = document.getElementById('global-chat-history-close');
-    
+
     if (historyBtn && historyView) {
       historyBtn.onclick = () => {
         historyView.hidden = false;
@@ -1519,7 +1540,7 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
       if (!msg) return;
       appendMsg(msg, 'user');
       input.value = '';
-      
+
       const tempBubble = document.createElement('div');
       tempBubble.className = 'chat-bubble chat-bubble--bot';
       tempBubble.textContent = 'AI đang suy nghĩ...';
@@ -1528,37 +1549,37 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
 
       try {
         if (typeof window.wanderChatReply === 'function') {
-           const res = await window.wanderChatReply(msg, { 
-             lang: localStorage.getItem('wander_chat_lang') || 'auto',
-             sessionId: currentSessionId
-           });
-           log.removeChild(tempBubble);
-           if (res.success) {
-             appendMsg(res.answer, 'bot');
-             if (res.sessionId) {
-               currentSessionId = res.sessionId;
-               localStorage.setItem('wander_current_session', currentSessionId);
-             }
-           } else {
-             appendMsg(res.answer || 'Xin lỗi, trợ lý đang bận. Vui lòng thử lại!', 'bot');
-           }
+          const res = await window.wanderChatReply(msg, {
+            lang: localStorage.getItem('wander_chat_lang') || 'auto',
+            sessionId: currentSessionId
+          });
+          log.removeChild(tempBubble);
+          if (res.success) {
+            appendMsg(res.answer, 'bot');
+            if (res.sessionId) {
+              currentSessionId = res.sessionId;
+              localStorage.setItem('wander_current_session', currentSessionId);
+            }
+          } else {
+            appendMsg(res.answer || 'Xin lỗi, trợ lý đang bận. Vui lòng thử lại!', 'bot');
+          }
         } else {
-           const token = localStorage.getItem('wander_token');
-           const res = await fetch('/api/chat', {
-             method: 'POST',
-             headers: { 'Content-Type': 'application/json', 'x-auth-token': token || '' },
-             body: JSON.stringify({ message: msg, lang: localStorage.getItem('wander_chat_lang') || 'auto', sessionId: currentSessionId })
-           });
-           const json = await res.json();
-           log.removeChild(tempBubble);
-           appendMsg(json.answer || json.reply || json.message || 'Xin lỗi, tôi chưa hiểu câu hỏi này.', 'bot');
-           if (json.sessionId) {
-             currentSessionId = json.sessionId;
-             localStorage.setItem('wander_current_session', currentSessionId);
-           }
+          const token = localStorage.getItem('wander_token');
+          const res = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-auth-token': token || '' },
+            body: JSON.stringify({ message: msg, lang: localStorage.getItem('wander_chat_lang') || 'auto', sessionId: currentSessionId })
+          });
+          const json = await res.json();
+          log.removeChild(tempBubble);
+          appendMsg(json.answer || json.reply || json.message || 'Xin lỗi, tôi chưa hiểu câu hỏi này.', 'bot');
+          if (json.sessionId) {
+            currentSessionId = json.sessionId;
+            localStorage.setItem('wander_current_session', currentSessionId);
+          }
         }
-      } catch(err) {
-        if(log.contains(tempBubble)) log.removeChild(tempBubble);
+      } catch (err) {
+        if (log.contains(tempBubble)) log.removeChild(tempBubble);
         appendMsg('Lỗi kết nối. Vui lòng thử lại.', 'bot');
       }
     });
@@ -1586,21 +1607,21 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
     const langDropdown = document.getElementById('global-lang-dropdown');
     const langCode = document.getElementById('global-lang-code');
     const savedLang = localStorage.getItem('wander_chat_lang') || 'auto';
-    
+
     if (langCode) langCode.textContent = savedLang.toUpperCase();
-    
+
     if (langBtn && langDropdown) {
       langBtn.onclick = (e) => {
         e.stopPropagation();
         langDropdown.classList.toggle('is-active');
       };
-      
+
       langDropdown.querySelectorAll('button').forEach(btn => {
-        btn.onclick = function() {
+        btn.onclick = function () {
           const lang = this.getAttribute('data-lang');
           localStorage.setItem('wander_chat_lang', lang);
           if (langCode) langCode.textContent = lang.toUpperCase();
-          
+
           const placeholders = {
             'auto': 'Hỏi về du lịch Việt Nam…',
             'vi': 'Hỏi về du lịch Việt Nam…',
@@ -1611,7 +1632,7 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
           };
           input.placeholder = placeholders[lang] || placeholders['vi'];
           langDropdown.classList.remove('is-active');
-          
+
           const confirmMsg = {
             'auto': 'Đã chuyển sang tự nhận diện ngôn ngữ.',
             'vi': 'Đã chuyển sang Tiếng Việt.',
@@ -1623,7 +1644,7 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
           appendMsg(confirmMsg[lang] || confirmMsg['vi'], 'bot');
         };
       });
-      
+
       document.addEventListener('click', () => {
         langDropdown.classList.remove('is-active');
       });
@@ -1667,132 +1688,132 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
     fetch('/api/auth/user/stats', {
       headers: { 'x-auth-token': token }
     })
-    .then(r => r.json())
-    .then(data => {
-      if (!data.success) return;
+      .then(r => r.json())
+      .then(data => {
+        if (!data.success) return;
 
-      const s = data.summary;
-      const c = data.charts;
+        const s = data.summary;
+        const c = data.charts;
 
-      // Cập nhật summary
-      if (document.querySelector('[data-stat-trips]')) document.querySelector('[data-stat-trips]').textContent = s.trips;
-      if (document.querySelector('[data-stat-favs]')) document.querySelector('[data-stat-favs]').textContent = s.favorites;
-      if (document.querySelector('[data-stat-chat]')) document.querySelector('[data-stat-chat]').textContent = s.messages;
-      if (document.querySelector('[data-stat-exp]')) document.querySelector('[data-stat-exp]').textContent = s.exp.toLocaleString();
-      if (document.querySelector('[data-stat-rank]')) document.querySelector('[data-stat-rank]').textContent = 'Hạng: ' + s.rank;
+        // Cập nhật summary
+        if (document.querySelector('[data-stat-trips]')) document.querySelector('[data-stat-trips]').textContent = s.trips;
+        if (document.querySelector('[data-stat-favs]')) document.querySelector('[data-stat-favs]').textContent = s.favorites;
+        if (document.querySelector('[data-stat-chat]')) document.querySelector('[data-stat-chat]').textContent = s.messages;
+        if (document.querySelector('[data-stat-exp]')) document.querySelector('[data-stat-exp]').textContent = s.exp.toLocaleString();
+        if (document.querySelector('[data-stat-rank]')) document.querySelector('[data-stat-rank]').textContent = 'Hạng: ' + s.rank;
 
-      // 1. Hoạt động (Line Chart)
-      const activityCtx = contexts[0].getContext('2d');
-      const actGradient = activityCtx.createLinearGradient(0, 0, 0, 200);
-      actGradient.addColorStop(0, 'rgba(0, 240, 255, 0.3)');
-      actGradient.addColorStop(1, 'rgba(0, 240, 255, 0)');
+        // 1. Hoạt động (Line Chart)
+        const activityCtx = contexts[0].getContext('2d');
+        const actGradient = activityCtx.createLinearGradient(0, 0, 0, 200);
+        actGradient.addColorStop(0, 'rgba(0, 240, 255, 0.3)');
+        actGradient.addColorStop(1, 'rgba(0, 240, 255, 0)');
 
-      chartInstances.line = new Chart(contexts[0], {
-        type: 'line',
-        data: {
-          labels: ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'],
-          datasets: [{
-            label: 'Hoạt động',
-            data: c.activity,
-            borderColor: '#00f0ff',
-            borderWidth: 3,
-            fill: true,
-            backgroundColor: actGradient,
-            tension: 0.4,
-            pointRadius: 4,
-            pointBackgroundColor: '#00f0ff'
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
-          scales: {
-            x: { grid: { display: false }, ticks: { color: textColor } },
-            y: { grid: { color: gridColor }, ticks: { color: textColor, stepSize: 1 }, beginAtZero: true }
-          }
-        }
-      });
-
-      // 2. Kỹ năng (Radar Chart)
-      chartInstances.radar = new Chart(contexts[1], {
-        type: 'radar',
-        data: {
-          labels: ['Khám phá', 'Kỹ năng', 'AI', 'Dịch vụ', 'Bền bỉ', 'Sở thích'],
-          datasets: [{
-            data: c.radar,
-            backgroundColor: 'rgba(0, 85, 255, 0.2)',
-            borderColor: '#0055ff',
-            borderWidth: 2,
-            pointRadius: 3
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
-          scales: {
-            r: {
-              grid: { color: gridColor },
-              angleLines: { color: gridColor },
-              pointLabels: { color: textColor, font: { size: 10 } },
-              ticks: { display: false, max: 100 },
-              suggestedMin: 0, suggestedMax: 100
+        chartInstances.line = new Chart(contexts[0], {
+          type: 'line',
+          data: {
+            labels: ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'],
+            datasets: [{
+              label: 'Hoạt động',
+              data: c.activity,
+              borderColor: '#00f0ff',
+              borderWidth: 3,
+              fill: true,
+              backgroundColor: actGradient,
+              tension: 0.4,
+              pointRadius: 4,
+              pointBackgroundColor: '#00f0ff'
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+              x: { grid: { display: false }, ticks: { color: textColor } },
+              y: { grid: { color: gridColor }, ticks: { color: textColor, stepSize: 1 }, beginAtZero: true }
             }
           }
-        }
-      });
+        });
 
-      // 3. Vùng miền (Bar Chart)
-      const regions = Object.keys(c.regions);
-      const regionValues = Object.values(c.regions);
-      chartInstances.region = new Chart(contexts[2], {
-        type: 'bar',
-        data: {
-          labels: regions.length ? regions : ['Chưa có'],
-          datasets: [{
-            data: regionValues.length ? regionValues : [0],
-            backgroundColor: ['#00f0ff', '#0055ff', '#f43f5e', '#10b981', '#fbbf24', '#8b5cf6'],
-            borderRadius: 8
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
-          scales: {
-            x: { grid: { display: false }, ticks: { color: textColor } },
-            y: { grid: { color: gridColor }, ticks: { color: textColor, stepSize: 1 }, beginAtZero: true }
+        // 2. Kỹ năng (Radar Chart)
+        chartInstances.radar = new Chart(contexts[1], {
+          type: 'radar',
+          data: {
+            labels: ['Khám phá', 'Kỹ năng', 'AI', 'Dịch vụ', 'Bền bỉ', 'Sở thích'],
+            datasets: [{
+              data: c.radar,
+              backgroundColor: 'rgba(0, 85, 255, 0.2)',
+              borderColor: '#0055ff',
+              borderWidth: 2,
+              pointRadius: 3
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+              r: {
+                grid: { color: gridColor },
+                angleLines: { color: gridColor },
+                pointLabels: { color: textColor, font: { size: 10 } },
+                ticks: { display: false, max: 100 },
+                suggestedMin: 0, suggestedMax: 100
+              }
+            }
           }
-        }
-      });
+        });
 
-      // 4. Sở thích (Doughnut Chart)
-      const interests = c.interests.slice(0, 5);
-      chartInstances.cat = new Chart(contexts[3], {
-        type: 'doughnut',
-        data: {
-          labels: interests.length ? interests : ['Chưa cập nhật'],
-          datasets: [{
-            data: interests.length ? interests.map(() => 1) : [1],
-            backgroundColor: ['#00f0ff', '#8b5cf6', '#fbbf24', '#f43f5e', '#10b981'],
-            borderWidth: 0
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: { legend: { position: 'right', labels: { color: textColor, boxWidth: 12, font: { size: 10 } } } },
-          cutout: '75%'
-        }
-      });
+        // 3. Vùng miền (Bar Chart)
+        const regions = Object.keys(c.regions);
+        const regionValues = Object.values(c.regions);
+        chartInstances.region = new Chart(contexts[2], {
+          type: 'bar',
+          data: {
+            labels: regions.length ? regions : ['Chưa có'],
+            datasets: [{
+              data: regionValues.length ? regionValues : [0],
+              backgroundColor: ['#00f0ff', '#0055ff', '#f43f5e', '#10b981', '#fbbf24', '#8b5cf6'],
+              borderRadius: 8
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+              x: { grid: { display: false }, ticks: { color: textColor } },
+              y: { grid: { color: gridColor }, ticks: { color: textColor, stepSize: 1 }, beginAtZero: true }
+            }
+          }
+        });
 
-    }).catch(err => {
-      console.error('Lỗi tải thống kê:', err);
-      document.querySelectorAll('[data-stat-trips], [data-stat-favs], [data-stat-chat], [data-stat-exp]').forEach(el => {
-        el.textContent = 'Err';
+        // 4. Sở thích (Doughnut Chart)
+        const interests = c.interests.slice(0, 5);
+        chartInstances.cat = new Chart(contexts[3], {
+          type: 'doughnut',
+          data: {
+            labels: interests.length ? interests : ['Chưa cập nhật'],
+            datasets: [{
+              data: interests.length ? interests.map(() => 1) : [1],
+              backgroundColor: ['#00f0ff', '#8b5cf6', '#fbbf24', '#f43f5e', '#10b981'],
+              borderWidth: 0
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { position: 'right', labels: { color: textColor, boxWidth: 12, font: { size: 10 } } } },
+            cutout: '75%'
+          }
+        });
+
+      }).catch(err => {
+        console.error('Lỗi tải thống kê:', err);
+        document.querySelectorAll('[data-stat-trips], [data-stat-favs], [data-stat-chat], [data-stat-exp]').forEach(el => {
+          el.textContent = 'Err';
+        });
       });
-    });
   }
 
   function getSession() {
@@ -1845,7 +1866,7 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
       if (settingsModal) {
         const appearanceTab = document.querySelector('[data-settings-tab="appearance"]');
         const securityTab = document.querySelector('[data-settings-tab="security"]');
-        
+
         if (!isAuth && appearanceTab) appearanceTab.click();
         else if (securityTab) securityTab.click();
 
@@ -1975,7 +1996,7 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
     // Auto Theme Checkbox
     const autoTheme = document.getElementById('auto-theme');
     if (autoTheme) {
-      autoTheme.onchange = function() {
+      autoTheme.onchange = function () {
         if (this.checked) {
           const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
           setTheme(isDark ? 'dark' : 'light', true);
@@ -2027,7 +2048,7 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
     document.documentElement.style.overflow = 'hidden';
     const backdrop = document.querySelector('[data-modal-backdrop]');
     if (backdrop) backdrop.hidden = false;
-    
+
     // Switch to tab
     const tabs = document.querySelectorAll('[data-auth-tab]');
     tabs.forEach(t => {
@@ -2059,12 +2080,12 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
       const div = document.createElement('div');
       div.innerHTML = modalHtml;
       document.body.appendChild(div);
-      
+
       const modal = document.getElementById('temp-confirm-modal');
       const backdrop = document.querySelector('[data-modal-backdrop]');
       if (backdrop) backdrop.hidden = false;
       modal.hidden = false;
-      
+
       document.getElementById('confirm-cancel').onclick = () => {
         modal.remove();
         if (backdrop) backdrop.hidden = true;
@@ -2087,7 +2108,7 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
     injectCommonComponents();
     initNavigation();
     updateNotificationBadge();
-    
+
     // Hash-based modal opening (e.g. #auth)
     const handleHashModal = () => {
       const hash = window.location.hash;
@@ -2100,7 +2121,83 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
     initTheme();
     initGlobalChatbot();
     initSettingsHandlers();
+    injectPerformanceHints();
+    setupHoverPrefetch();
+    injectGlobalStyles();
+    setupLazyLoading();
   };
+
+  function injectPerformanceHints() {
+    const hints = [
+      { rel: 'preconnect', href: window.location.origin },
+      { rel: 'dns-prefetch', href: 'https://fonts.googleapis.com' },
+      { rel: 'dns-prefetch', href: 'https://images.unsplash.com' }
+    ];
+    hints.forEach(h => {
+      if (document.querySelector(`link[href="${h.href}"][rel="${h.rel}"]`)) return;
+      const link = document.createElement('link');
+      Object.assign(link, h);
+      document.head.appendChild(link);
+    });
+  }
+
+  function setupHoverPrefetch() {
+    // Prefetch API data when user hovers over a navigation link
+    document.addEventListener('mouseover', (e) => {
+      const link = e.target.closest('a');
+      if (!link || !link.href || !link.href.startsWith(window.location.origin)) return;
+
+      const page = link.href.split('/').pop().split('#')[0].split('?')[0];
+      if (!page) return;
+
+      const token = localStorage.getItem('wander_token');
+      if (!token) return;
+
+      if (page === 'leaderboard.html') {
+        prefetchAPI('/api/auth/leaderboard');
+      } else if (page === 'social-hub.html') {
+        prefetchAPI('/api/social/stories');
+        prefetchAPI('/api/social/feed');
+      } else if (page === 'quests.html') {
+        prefetchAPI('/api/auth/user/rank');
+        prefetchAPI('/api/auth/user/activity');
+      } else if (page === 'profile.html') {
+        const url = new URL(link.href);
+        const id = url.searchParams.get('id');
+        if (id) {
+          prefetchAPI(`/api/social/users/${id}`);
+          prefetchAPI(`/api/social/posts/user/${id}`);
+        } else {
+          prefetchAPI('/api/auth/user/me');
+        }
+      }
+    }, { passive: true });
+  }
+
+  const _prefetchCache = new Set();
+  function prefetchAPI(url) {
+    if (_prefetchCache.has(url)) return;
+    _prefetchCache.add(url);
+
+    // Check if already in sessionStorage and fresh
+    const cacheKey = 'wv_prefetch_' + url;
+    const cached = sessionStorage.getItem(cacheKey);
+    if (cached) {
+      try {
+        const { timestamp } = JSON.parse(cached);
+        if (Date.now() - timestamp < 30000) return; // Still fresh
+      } catch (e) { }
+    }
+
+    console.log(`🚀 Big-Tech Prefetch: ${url}`);
+    const token = localStorage.getItem('wander_token') || localStorage.getItem('wander_admin_token');
+    fetch(url, { headers: { 'x-auth-token': token } })
+      .then(res => res.json())
+      .then(data => {
+        sessionStorage.setItem(cacheKey, JSON.stringify({ data, timestamp: Date.now() }));
+      })
+      .catch(() => _prefetchCache.delete(url));
+  }
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initAll);
@@ -2108,7 +2205,101 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
     initAll();
   }
 
-  return { setTheme, toggleTheme, showToast, setButtonLoading, toggleNotificationDrawer, updateNotificationBadge, markAsRead, markAllAsRead, syncAuthUI, forceLogout, toggleUserMenu, openAuthModal, confirm, openPlaceDetail, getRankBadgeHTML, getRankIcon, getStoreKey, initSettingsHandlers, trackQuestActivity, getQuestActivity };
+  function injectGlobalStyles() {
+    if (document.getElementById('wv-global-performance-styles')) return;
+    const style = document.createElement('style');
+    style.id = 'wv-global-performance-styles';
+    style.innerHTML = `
+      #wv-top-loader {
+        position: fixed; top: 0; left: 0; right: 0; height: 3px;
+        background: linear-gradient(90deg, #fbbf24, #f43f5e, #fbbf24);
+        background-size: 200% 100%;
+        z-index: 9999999;
+        transform-origin: left;
+        transform: scaleX(0);
+        transition: transform 0.4s cubic-bezier(0.1, 0.7, 1, 0.1), opacity 0.3s;
+        pointer-events: none;
+      }
+      #wv-top-loader.loading { transform: scaleX(0.7); animation: loaderShimmer 2s infinite linear; }
+      #wv-top-loader.finished { transform: scaleX(1); opacity: 0; transition: transform 0.2s, opacity 0.4s 0.2s; }
+      @keyframes loaderShimmer {
+        0% { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+      }
+      .loading-shimmer {
+        background: linear-gradient(90deg, rgba(255,255,255,0.05) 25%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 75%);
+        background-size: 200% 100%;
+        animation: loadingShimmer 1.5s infinite;
+      }
+      @keyframes loadingShimmer {
+        0% { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+      }
+      [data-theme="light"] .loading-shimmer {
+        background: linear-gradient(90deg, rgba(0,0,0,0.05) 25%, rgba(0,0,0,0.1) 50%, rgba(0,0,0,0.05) 75%);
+        background-size: 200% 100%;
+      }
+    `;
+    document.head.appendChild(style);
+
+    const loader = document.createElement('div');
+    loader.id = 'wv-top-loader';
+    document.body.appendChild(loader);
+  }
+
+  function startTopLoader() {
+    const loader = document.getElementById('wv-top-loader');
+    if (loader) {
+      loader.classList.remove('finished');
+      loader.classList.add('loading');
+    }
+  }
+
+  function finishTopLoader() {
+    const loader = document.getElementById('wv-top-loader');
+    if (loader) {
+      loader.classList.remove('loading');
+      loader.classList.add('finished');
+    }
+  }
+
+  // Hijack all internal links for the top loader
+  document.addEventListener('click', (e) => {
+    const link = e.target.closest('a');
+    if (!link || !link.href || link.target === '_blank') return;
+    if (link.href.startsWith(window.location.origin) && !link.href.includes('#')) {
+      startTopLoader();
+    }
+  });
+
+  function setupLazyLoading() {
+    // Big-Tech Pattern: IntersectionObserver for images
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const img = entry.target;
+          if (img.dataset.src) {
+            img.src = img.dataset.src;
+            img.removeAttribute('data-src');
+            observer.unobserve(img);
+          }
+        }
+      });
+    }, { rootMargin: '200px' });
+
+    const refreshLazy = () => {
+      document.querySelectorAll('img[data-src]').forEach(img => observer.observe(img));
+    };
+
+    refreshLazy();
+    // MutationObserver to watch for newly added images
+    const mut = new MutationObserver(refreshLazy);
+    mut.observe(document.body, { childList: true, subtree: true });
+  }
+
+  injectGlobalStyles(); // Pre-inject
+
+  return { setTheme, toggleTheme, showToast, setButtonLoading, toggleNotificationDrawer, updateNotificationBadge, markAsRead, markAllAsRead, syncAuthUI, forceLogout, toggleUserMenu, openAuthModal, confirm, openPlaceDetail, getRankBadgeHTML, getRankIcon, getStoreKey, initSettingsHandlers, trackQuestActivity, getQuestActivity, startTopLoader, finishTopLoader };
 })());
 
 

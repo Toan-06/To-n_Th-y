@@ -21,18 +21,31 @@
   }
 
   function loadPlacesFromAPI() {
+    // Cache PLACES in session storage to speed up page transitions
+    const cached = sessionStorage.getItem('wv_cached_places');
+    if (cached) {
+      try {
+        const data = JSON.parse(cached);
+        if (data && data.length > 0) {
+          PLACES = data;
+          renderDestCards();
+          return Promise.resolve(true);
+        }
+      } catch (e) {}
+    }
+
     renderSkeletons();
     return fetch('/api/places').then(function (res) {
       return res.json();
     }).then(function (json) {
       if (json.success && Array.isArray(json.data) && json.data.length > 0) {
         PLACES = json.data;
+        sessionStorage.setItem('wv_cached_places', JSON.stringify(PLACES));
         return true;
       }
       throw new Error("Invalid format");
     }).catch(function (e) {
       console.warn('Không thể tải từ API, dùng dữ liệu tĩnh:', e);
-      // Fallback: dùng dữ liệu tĩnh từ places-data.js
       if (Array.isArray(window.WANDER_PLACES) && window.WANDER_PLACES.length > 0) {
         PLACES = window.WANDER_PLACES;
       }
@@ -42,30 +55,47 @@
     });
   }
 
-  // Lấy dữ liệu thống kê từ API và điền vào UI
   function loadPublicStats() {
+    const cached = sessionStorage.getItem('wv_cached_stats');
+    if (cached) {
+      const d = JSON.parse(cached);
+      fillStatsUI(d);
+      return;
+    }
+
     fetch('/api/public/stats')
       .then(function(res) { return res.json(); })
       .then(function(json) {
         if (!json.success || !json.data) return;
-        var d = json.data;
-        var sUser = document.getElementById('landing-stat-users');
-        var sPlace = document.getElementById('landing-stat-places');
-        var sReview = document.getElementById('landing-stat-reviews');
-        if (sUser && d.userCount !== undefined) sUser.textContent = (d.userCount || 0).toLocaleString('vi-VN') + '+';
-        if (sPlace && d.placeCount !== undefined) sPlace.textContent = (d.placeCount || 0).toLocaleString('vi-VN') + '+';
-        if (sReview && d.feedbackCount !== undefined) sReview.textContent = (d.feedbackCount || 0).toLocaleString('vi-VN') + '+';
+        sessionStorage.setItem('wv_cached_stats', JSON.stringify(json.data));
+        fillStatsUI(json.data);
       }).catch(function(e) { console.warn('Lỗi tải stats', e); });
   }
 
-  // Lấy các bài đánh giá công khai từ API và điền vào slider
+  function fillStatsUI(d) {
+    var sUser = document.getElementById('landing-stat-users');
+    var sPlace = document.getElementById('landing-stat-places');
+    var sReview = document.getElementById('landing-stat-reviews');
+    if (sUser && d.userCount !== undefined) sUser.textContent = (d.userCount || 0).toLocaleString('vi-VN') + '+';
+    if (sPlace && d.placeCount !== undefined) sPlace.textContent = (d.placeCount || 0).toLocaleString('vi-VN') + '+';
+    if (sReview && d.feedbackCount !== undefined) sReview.textContent = (d.feedbackCount || 0).toLocaleString('vi-VN') + '+';
+  }
+
   function loadPublicReviews() {
     var track = document.getElementById('review-track-dynamic');
     if (!track) return;
+    
+    const cached = sessionStorage.getItem('wv_cached_reviews');
+    if (cached) {
+      track.innerHTML = cached;
+      if (typeof initReviewSlider === 'function') setTimeout(initReviewSlider, 100);
+      return;
+    }
+
     fetch('/api/public/reviews')
       .then(function(res) { return res.json(); })
       .then(function(json) {
-        if (!json.success || !json.data || json.data.length === 0) return; // Fallback to hardcoded HTML if empty
+        if (!json.success || !json.data || json.data.length === 0) return;
         var html = json.data.map(function(r) {
           var name = r.name || 'Khách ẩn danh';
           var msg = (r.message || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -75,7 +105,7 @@
             '</blockquote>';
         }).join('');
         track.innerHTML = html;
-        // Re-initialize slider if needed (depends on UI implementation)
+        sessionStorage.setItem('wv_cached_reviews', html);
         if (typeof initReviewSlider === 'function') {
           setTimeout(initReviewSlider, 100);
         }
