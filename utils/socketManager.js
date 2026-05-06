@@ -36,8 +36,10 @@ const initSocket = (server) => {
         }
         userSockets.get(userId).add(socket.id);
 
-        // Join personal room for notifications
-        socket.join(userId);
+        // Join personal rooms for all possible identifiers to ensure reliability
+        if (socket.user._id) socket.join(socket.user._id.toString());
+        if (socket.user.customId) socket.join(socket.user.customId.toString());
+        if (socket.user.id) socket.join(socket.user.id.toString());
 
         socket.on('join_chat', (targetId) => {
             // User wants to chat with targetId
@@ -87,14 +89,23 @@ const sendNotification = (userId, notification) => {
 };
 
 const emitToUser = (userId, event, data) => {
-    if (io) {
-        io.to(userId).emit(event, data);
+    if (io && userId) {
+        io.to(userId.toString()).emit(event, data);
     }
+};
+
+// Emit an event to a list of user IDs
+const emitToUsers = (userIds, event, data) => {
+    if (!io || !userIds || !userIds.length) return;
+    userIds.forEach(uid => {
+        if (uid) io.to(uid.toString()).emit(event, data);
+    });
 };
 
 module.exports = {
     initSocket,
     getIO,
     sendNotification,
-    emitToUser
+    emitToUser,
+    emitToUsers
 };

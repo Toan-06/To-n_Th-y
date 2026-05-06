@@ -15,7 +15,7 @@ const User = require('../models/User');
 const Message = require('../models/Message');
 const Group = require('../models/Group');
 const Story = require('../models/Story');
-const { emitToUser, sendNotification } = require('../utils/socketManager');
+const { emitToUser, emitToUsers, sendNotification } = require('../utils/socketManager');
 
 // Multer config for media uploads
 const storage = multer.diskStorage({
@@ -201,6 +201,14 @@ router.post('/posts', auth, async (req, res) => {
         result.userName = populatedPost.userId.displayName || populatedPost.userId.name;
         result.userAvatar = populatedPost.userId.avatar;
     }
+    
+    // Real-time: broadcast new post to all friends
+    try {
+      const friends = await Friendship.find({ $or: [{ requester: realId, status: 'accepted' }, { recipient: realId, status: 'accepted' }] });
+      const friendIds = friends.map(f => f.requester.toString() === realId ? f.recipient : f.requester);
+      emitToUsers(friendIds, 'new_post', result);
+    } catch(e) { /* Non-critical */ }
+    
     res.json({ success: true, post: result });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
@@ -296,8 +304,22 @@ router.post('/posts/:id/comment', auth, async (req, res) => {
     };
     post.comments.push(comment);
     await post.save();
+    const addedComment = post.comments[post.comments.length - 1];
     
-    // Real-time notify via socket
+    // Real-time: notify post owner + emit new_comment event to everyone viewing this post
+    const commentPayload = {
+      postId: post._id.toString(),
+      comment: {
+        _id: addedComment._id,
+        userId: realId,
+        userName: req.user.displayName || req.user.name,
+        userAvatar: req.user.avatar || '',
+        text,
+        createdAt: addedComment.createdAt
+      },
+      commentCount: post.comments.length
+    };
+    
     if (post.userId.toString() !== realId.toString()) {
       sendNotification(post.userId, {
         type: 'comment',
@@ -305,9 +327,12 @@ router.post('/posts/:id/comment', auth, async (req, res) => {
         message: `${req.user.displayName || req.user.name} đã bình luận bài viết của bạn: "${text.substring(0, 30)}..."`,
         relatedId: post._id
       });
+      emitToUser(post.userId, 'new_comment', commentPayload);
     }
+    // Also emit to the commenter themselves (for multi-tab sync)
+    emitToUser(realId, 'new_comment', commentPayload);
     
-    res.json({ success: true, comment });
+    res.json({ success: true, comment: addedComment });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
 
@@ -354,8 +379,22 @@ router.post('/friends/respond', auth, async (req, res) => {
     const { friendshipId, action } = req.body;
     const friendship = await Friendship.findById(friendshipId);
     if (!friendship || friendship.recipient.toString() !== realId) return res.status(403).json({ message: 'Thao tác không hợp lệ' });
-    if (action === 'accept') { friendship.status = 'accepted'; friendship.updatedAt = new Date(); await friendship.save(); }
-    else { await Friendship.findByIdAndDelete(friendshipId); }
+    if (action === 'accept') {
+      friendship.status = 'accepted';
+      friendship.updatedAt = new Date();
+      await friendship.save();
+      
+      // Real-time: notify the original requester that their request was accepted
+      const acceptor = await require('../models/User').findById(realId).select('name displayName avatar rank').lean();
+      emitToUser(friendship.requester, 'friend_accepted', {
+        friendId: realId,
+        friendName: req.user.displayName || req.user.name,
+        friendAvatar: req.user.avatar || '',
+        friend: acceptor
+      });
+    } else {
+      await Friendship.findByIdAndDelete(friendshipId);
+    }
     res.json({ success: true });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
@@ -433,6 +472,14 @@ router.post('/posts/media', auth, upload.array('media', 5), async (req, res) => 
         result.userName = populatedPost.userId.displayName || populatedPost.userId.name;
         result.userAvatar = populatedPost.userId.avatar;
     }
+    
+    // Real-time: broadcast new post to all friends
+    try {
+      const friends = await Friendship.find({ $or: [{ requester: realId, status: 'accepted' }, { recipient: realId, status: 'accepted' }] });
+      const friendIds = friends.map(f => f.requester.toString() === realId ? f.recipient : f.requester);
+      emitToUsers(friendIds, 'new_post', result);
+    } catch(e) { /* Non-critical */ }
+    
     res.json({ success: true, post: result });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
@@ -488,6 +535,7 @@ router.post('/messages/send', auth, async (req, res) => {
     // Real-time emit via socket
     emitToUser(realRecipientId, 'receive_message', {
       senderId: realId,
+      senderCustomId: req.user.customId || req.user.id,
       senderName: req.user.displayName || req.user.name,
       senderAvatar: req.user.avatar || '',
       text,

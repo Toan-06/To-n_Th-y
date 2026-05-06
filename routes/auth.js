@@ -20,6 +20,8 @@ const signPortalToken = (account, portal, role) => {
   const accountId = account.customId || account.id || account._id.toString();
   const payload = {
     id: accountId,
+    _id: account._id.toString(),
+    customId: account.customId || account.id,
     email: account.email,
     name: account.name,
     displayName: account.displayName || account.name,

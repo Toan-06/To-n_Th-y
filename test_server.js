@@ -1,0 +1,4 @@
+const express = require('express');
+const app = express();
+app.get('/ping', (req, res) => res.send('pong'));
+app.listen(8888, () => console.log('Test server on 8888'));

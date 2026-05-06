@@ -63,7 +63,7 @@ const SocialHub = {
         });
 
         this.socket.on('connect', () => {
-            console.log("✅ Real-time connected!");
+            console.log("✅ Real-time connected! (Socket ID: " + this.socket.id + ")");
         });
 
         this.socket.on('receive_message', (msg) => {
@@ -80,6 +80,79 @@ const SocialHub = {
             if (notif.type === 'friend_request') this.fetchPendingFriends();
         });
 
+        this.socket.on('new_post', (post) => {
+            console.log("📝 New post received:", post);
+            // Ignore if it's our own post (we handle it optimistically)
+            if (this.user && (String(post.userId) === String(this.user._id) || String(post.userId._id) === String(this.user._id))) return;
+            
+            // Check if post already exists
+            if (!this.posts.some(p => p._id === post._id)) {
+                this.posts.unshift(post);
+                const feedContainer = document.getElementById('feed-container');
+                if (feedContainer) {
+                    // Remove empty state if present
+                    const emptyState = feedContainer.querySelector('.glass-card p');
+                    if (emptyState && emptyState.textContent.includes('Chưa có bài viết nào')) {
+                        feedContainer.innerHTML = '';
+                    }
+                    const postHtml = this.renderPostCard(post);
+                    feedContainer.insertAdjacentHTML('afterbegin', postHtml);
+                }
+            }
+        });
+
+        this.socket.on('new_comment', (data) => {
+            console.log("💬 New comment received:", data);
+            const { postId, comment, commentCount } = data;
+            
+            // Update local posts array
+            const post = this.posts.find(p => p._id === postId);
+            if (post) {
+                if (!post.comments) post.comments = [];
+                // Check if comment already exists (for the sender who also receives it)
+                if (!post.comments.some(c => c._id === comment._id)) {
+                    post.comments.push(comment);
+                }
+            }
+
+            // Update UI
+            const commentList = document.getElementById(`comments-list-${postId}`);
+            if (commentList) {
+                // Remove empty state
+                const noComments = commentList.querySelector('.no-comments');
+                if (noComments) noComments.remove();
+                
+                // Add new comment HTML
+                const postAuthorId = post ? (post.userId._id || post.userId) : null;
+                const commentHtml = this.renderCommentItem(comment, postAuthorId);
+                
+                // Check if already exists in DOM
+                if (!commentList.querySelector(`[data-comment-id="${comment._id}"]`)) {
+                    commentList.insertAdjacentHTML('beforeend', commentHtml);
+                }
+            }
+
+            // Update comment count
+            const postCard = document.querySelector(`.post-card[data-post-id="${postId}"]`);
+            if (postCard) {
+                const countSpan = postCard.querySelector('.comments-shares-count');
+                if (countSpan) {
+                    const parts = countSpan.textContent.split(' · ');
+                    parts[0] = `${commentCount} bình luận`;
+                    countSpan.textContent = parts.join(' · ');
+                }
+            }
+        });
+
+        this.socket.on('friend_accepted', (data) => {
+            console.log("👥 Friend request accepted:", data);
+            if (window.WanderUI) {
+                WanderUI.showToast(`${data.friendName} đã chấp nhận lời mời kết bạn!`, 'success');
+            }
+            this.loadFriendsList();
+            this.loadUserProfile();
+        });
+
         this.socket.on('connect_error', (err) => {
             console.warn("🔌 Socket connection error:", err.message);
         });
@@ -87,7 +160,14 @@ const SocialHub = {
 
     handleIncomingMessage: function (msg) {
         // 1. If chat drawer is open with THIS user, append message
-        if (this.chatTarget && String(this.chatTarget.userId) === String(msg.senderId)) {
+        // We check both senderId (ObjectId) and senderCustomId for maximum reliability
+        const targetId = String(this.chatTarget?.userId || '');
+        const isMatch = targetId === String(msg.senderId) || targetId === String(msg.senderCustomId);
+
+        if (this.chatTarget && isMatch) {
+            // Refresh conversation list in background
+            this.loadConversations();
+
             const body = document.getElementById('chat-messages');
             if (body) {
                 const emptyMsg = body.querySelector('.chat-empty, .chat-loading');
@@ -1327,7 +1407,13 @@ const SocialHub = {
                 if (post) {
                     if (!post.reactions) post.reactions = {};
                     post.reactions[this.user._id] = reactionType;
-                    this.renderFeed();
+                    
+                    // Update only this post in DOM
+                    const postCard = document.querySelector(`.post-card[data-post-id="${postId}"]`);
+                    if (postCard) {
+                        const newPostHtml = this.renderPostCard(post);
+                        postCard.outerHTML = newPostHtml;
+                    }
                 }
                 this.hideReactionPicker(postId);
             }
@@ -1343,7 +1429,13 @@ const SocialHub = {
                 const post = this.posts.find(p => p._id === postId);
                 if (post && post.reactions) {
                     delete post.reactions[this.user._id];
-                    this.renderFeed();
+                    
+                    // Update only this post in DOM
+                    const postCard = document.querySelector(`.post-card[data-post-id="${postId}"]`);
+                    if (postCard) {
+                        const newPostHtml = this.renderPostCard(post);
+                        postCard.outerHTML = newPostHtml;
+                    }
                 }
             }
         }).catch(err => console.error('Remove reaction error:', err));
@@ -1580,20 +1672,26 @@ const SocialHub = {
                 });
             }
             const data = await res.json();
-            if (data.success) {
-                document.getElementById('post-modal')?.setAttribute('hidden', '');
-                if (contentInput) contentInput.value = '';
-                if (fileInput) fileInput.value = '';
-                const preview = document.getElementById('media-preview');
-                if (preview) preview.innerHTML = '';
-                if (locationEl) {
-                    locationEl.innerHTML = '📍 Gắn thẻ địa điểm';
-                    delete locationEl.dataset.location;
-                    locationEl.classList.remove('active');
-                }
-                await this.fetchFeed();
                 await this.loadUserProfile();
-            }
+                
+                // Optimistic UI: Prepend to feed and update local array
+                const newPost = data.post;
+                if (newPost) {
+                    if (!this.posts.some(p => p._id === newPost._id)) {
+                        this.posts.unshift(newPost);
+                        const feedContainer = document.getElementById('feed-container');
+                        if (feedContainer) {
+                            // Remove empty state if present
+                            const emptyState = feedContainer.querySelector('.glass-card p');
+                            if (emptyState && emptyState.textContent && emptyState.textContent.includes('Chưa có bài viết nào')) {
+                                feedContainer.innerHTML = '';
+                            }
+                            const postHtml = this.renderPostCard(newPost);
+                            feedContainer.insertAdjacentHTML('afterbegin', postHtml);
+                        }
+                    }
+                    if (window.WanderUI) WanderUI.showToast('Đã đăng bài viết! 🎉', 'success');
+                }
         } catch (err) {
             console.error(err);
             alert("Lỗi khi đăng bài!");
@@ -1642,9 +1740,22 @@ const SocialHub = {
         if (!text) return;
         input.value = '';
         try {
-            await fetch(`/api/social/posts/${postId}/comment`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-auth-token': localStorage.getItem('wander_token') }, body: JSON.stringify({ text }) });
-            await this.fetchFeed();
-            setTimeout(() => { const s = document.getElementById(`comments-${postId}`); if (s) s.style.display = 'block'; }, 100);
+            const res = await fetch(`/api/social/posts/${postId}/comment`, { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json', 'x-auth-token': localStorage.getItem('wander_token') }, 
+                body: JSON.stringify({ text }) 
+            });
+            const data = await res.json();
+            if (data.success) {
+                // The new_comment socket listener will handle the UI update even for the sender,
+                // but we can also do it here for extra snappy feel if socket is slow.
+                // However, to avoid duplicates, we'll let the socket listener handle it since 
+                // the backend now emits it to the sender too.
+                
+                // Just ensure the comment box stays open
+                const s = document.getElementById(`comments-${postId}`);
+                if (s) s.style.display = 'block';
+            }
         } catch (err) { }
     },
 
@@ -1812,7 +1923,7 @@ const SocialHub = {
         const container = document.getElementById('conversations-list');
         if (!container) return;
         try {
-            const res = await fetch('/api/social/conversations', { headers: { 'x-auth-token': localStorage.getItem('wander_token') } });
+            const res = await fetch(`/api/social/conversations?t=${Date.now()}`, { headers: { 'x-auth-token': localStorage.getItem('wander_token') } });
             const data = await res.json();
             if (data.success && data.data.length > 0) {
                 container.innerHTML = data.data.map(c => `
@@ -1841,7 +1952,7 @@ const SocialHub = {
         const body = document.getElementById('chat-messages');
         body.innerHTML = '<div class="chat-loading"><span class="loading-spinner"></span> Đang tải...</div>';
         try {
-            const res = await fetch(`/api/social/messages/${userId}`, { headers: { 'x-auth-token': localStorage.getItem('wander_token') } });
+            const res = await fetch(`/api/social/messages/${userId}?t=${Date.now()}`, { headers: { 'x-auth-token': localStorage.getItem('wander_token') } });
             const data = await res.json();
             if (data.success) {
                 if (data.data.length === 0) {
@@ -1861,8 +1972,12 @@ const SocialHub = {
             }
         } catch (err) { body.innerHTML = '<p class="chat-error">Lỗi tải tin nhắn.</p>'; }
 
-        // REMOVED: Polling is no longer needed thanks to Socket.io
+        // Join personal chat room
+        if (this.socket) {
+            this.socket.emit('join_chat', userId);
+        }
     },
+
 
     // Polling is deprecated, kept as fallback or removed
     refreshChatMessages: async function () {
@@ -1870,7 +1985,12 @@ const SocialHub = {
     },
 
     closeChat: function () {
-        document.getElementById('chat-drawer')?.classList.remove('open');
+        const drawer = document.getElementById('chat-drawer');
+        if (drawer) drawer.classList.remove('open');
+        
+        if (this.socket && this.chatTarget) {
+            this.socket.emit('leave_chat', this.chatTarget.userId);
+        }
         this.chatTarget = null;
         if (this.chatPollingInterval) {
             clearInterval(this.chatPollingInterval);
@@ -1897,6 +2017,7 @@ const SocialHub = {
 
         try {
             await fetch('/api/social/messages/send', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-auth-token': localStorage.getItem('wander_token') }, body: JSON.stringify({ recipientId: this.chatTarget.userId, text }) });
+            this.loadConversations(); // Update list after sending
         } catch (err) { }
     },
 
