@@ -672,18 +672,32 @@
 
     var globalRankData = null;
 
+    var globalStats = null;
+    var globalTrips = [];
+    var globalClaimed = [];
+
     function loadPage() {
       if (!token) {
         document.getElementById('loginWarn').style.display = 'block';
+        if (window.WanderUI && window.WanderUI.finishTopLoader) window.WanderUI.finishTopLoader();
         return;
       }
       document.getElementById('questsContainer').style.display = 'block';
 
-      // Load all required data in parallel for maximum speed
+      // Immediate UI from cache if possible
+      const cached = localStorage.getItem('wander_user');
+      if (cached) {
+          try {
+              const u = JSON.parse(cached);
+              updateHeroRank(u);
+          } catch(e) {}
+      }
+
+      // Parallel Loading
       Promise.all([
-        fetch('/api/auth/user/rank', { headers: { 'x-auth-token': token } }).then(r => r.json()),
-        fetch('/api/auth/user/activity', { headers: { 'x-auth-token': token } }).then(r => r.json()),
-        fetch('/api/planner/my-trips', { headers: { 'x-auth-token': token } }).then(r => r.json())
+        fetch('/api/auth/user/rank?t=' + Date.now(), { headers: { 'x-auth-token': token } }).then(r => r.json()),
+        fetch('/api/auth/user/activity?t=' + Date.now(), { headers: { 'x-auth-token': token } }).then(r => r.json()),
+        fetch('/api/planner/my-trips?t=' + Date.now(), { headers: { 'x-auth-token': token } }).then(r => r.json())
       ])
       .then(function(results) {
         var rankRes = results[0];
@@ -692,43 +706,60 @@
 
         if (rankRes && rankRes.success) {
           globalRankData = rankRes;
-          var mini = document.getElementById('heroRankMini');
-          mini.style.display = 'inline-flex';
-          
-          document.getElementById('heroRankName').innerHTML = WanderUI.getRankBadgeHTML(rankRes.rank, rankRes.rankTier) + '<div style="margin-left: 12px; font-weight: 800; color: #fff; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; background: rgba(255,255,255,0.1); padding: 4px 12px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.2); white-space: nowrap;">' + rankRes.rank + ' ' + (rankRes.rankTier || '') + '</div>';
-          document.getElementById('heroXpText').textContent = rankRes.points + ' XP';
-          
-          var thresholds = [0,100,200,300,500,700,1000,1300,1600,2000,2400,2800,3200,3700,4200,5000];
-          var prev = 0;
-          for (var i = 0; i < thresholds.length; i++) {
-            if (rankRes.nextThreshold === thresholds[i]) { prev = thresholds[i-1] || 0; break; }
-          }
-          var pct = rankRes.nextThreshold ? ((rankRes.points - prev) / (rankRes.nextThreshold - prev) * 100) : 100;
-          document.getElementById('heroXpBar').style.width = Math.min(100, Math.max(0, pct)) + '%';
+          globalClaimed = rankRes.claimedQuests || [];
+          updateHeroRank(rankRes);
         }
 
         var actLog = (actRes && actRes.success ? actRes.activityLog : []) || [];
-        var allTrips = (tripsRes && tripsRes.success ? tripsRes.data : []) || [];
+        globalTrips = (tripsRes && tripsRes.success ? tripsRes.data : []) || [];
         
         if (globalRankData) {
-          var stats = getCalculatedStats(actLog, allTrips, globalRankData);
+          globalStats = getCalculatedStats(actLog, globalTrips, globalRankData);
           var currentTab = document.querySelector('.vibrant-tab.is-active').getAttribute('data-tab');
-          renderQuests(currentTab, stats, globalRankData.claimedQuests);
+          renderQuests(currentTab, globalStats, globalClaimed);
         } else {
           renderQuests('all', {}, []);
         }
+        if (window.WanderUI && window.WanderUI.finishTopLoader) window.WanderUI.finishTopLoader();
       })
       .catch(function(err) { 
         console.error("Quests loading error:", err);
+        if (window.WanderUI && window.WanderUI.finishTopLoader) window.WanderUI.finishTopLoader();
         renderQuests('all', {}, []); 
       });
+    }
+
+    function updateHeroRank(data) {
+        var mini = document.getElementById('heroRankMini');
+        if (!mini) return;
+        mini.style.display = 'inline-flex';
+        
+        document.getElementById('heroRankName').innerHTML = WanderUI.getRankBadgeHTML(data.rank, data.rankTier) + 
+          '<div style="margin-left: 12px; font-weight: 800; color: #fff; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; background: rgba(255,255,255,0.1); padding: 4px 12px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.2); white-space: nowrap;">' + 
+          (data.rank || 'Đồng') + ' ' + (data.rankTier || 'I') + '</div>';
+        document.getElementById('heroXpText').textContent = (data.points || 0) + ' XP';
+        
+        var thresholds = [0,100,200,300,500,700,1000,1300,1600,2000,2400,2800,3200,3700,4200,5000];
+        var prev = 0;
+        const pts = data.points || 0;
+        const nextThresh = data.nextThreshold || 100;
+        for (var i = 0; i < thresholds.length; i++) {
+          if (nextThresh === thresholds[i]) { prev = thresholds[i-1] || 0; break; }
+        }
+        var pct = nextThresh ? ((pts - prev) / (nextThresh - prev) * 100) : 100;
+        document.getElementById('heroXpBar').style.width = Math.min(100, Math.max(0, pct)) + '%';
     }
 
     document.querySelectorAll('.vibrant-tab').forEach(function(tab) {
       tab.addEventListener('click', function() {
         document.querySelectorAll('.vibrant-tab').forEach(function(t) { t.classList.remove('is-active'); });
         tab.classList.add('is-active');
-        loadPage();
+        const tabKey = tab.getAttribute('data-tab');
+        if (globalStats) {
+            renderQuests(tabKey, globalStats, globalClaimed);
+        } else {
+            loadPage();
+        }
       });
     });
 

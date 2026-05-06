@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const mongoose = require('mongoose');
 const router = express.Router();
 const { auth, JWT_SECRET } = require('./auth');
@@ -159,7 +159,7 @@ QUY TẮC JSON BẮT BUỘC:
         $or: [
           { customId: req.user.id },
           { id: req.user.id },
-          { _id: mongoose.Types.ObjectId.isValid(req.user.id) ? req.user.id : new mongoose.Types.ObjectId() }
+          ...(mongoose.Types.ObjectId.isValid(req.user.id) ? [{ _id: req.user.id }] : [])
         ]
       });
       if (userDoc) {
@@ -196,7 +196,7 @@ QUY TẮC JSON BẮT BUỘC:
             $or: [
               { customId: req.user.id },
               { id: req.user.id },
-              { _id: mongoose.Types.ObjectId.isValid(req.user.id) ? req.user.id : new mongoose.Types.ObjectId() }
+              ...(mongoose.Types.ObjectId.isValid(req.user.id) ? [{ _id: req.user.id }] : [])
             ]
           });
           if (user) {
@@ -386,7 +386,7 @@ router.post('/smart-wizard', optionalAuth, async (req, res) => {
         $or: [
           { customId: req.user.id },
           { id: req.user.id },
-          { _id: mongoose.Types.ObjectId.isValid(req.user.id) ? req.user.id : new mongoose.Types.ObjectId() }
+          ...(mongoose.Types.ObjectId.isValid(req.user.id) ? [{ _id: req.user.id }] : [])
         ]
       }).select('preferenceProfile preferences');
       if (user && user.preferenceProfile) {
@@ -497,7 +497,7 @@ router.post('/save-manual', auth, async (req, res) => {
       $or: [
         { customId: req.user.id },
         { id: req.user.id },
-        { _id: mongoose.Types.ObjectId.isValid(req.user.id) ? req.user.id : new mongoose.Types.ObjectId() }
+        ...(mongoose.Types.ObjectId.isValid(req.user.id) ? [{ _id: req.user.id }] : [])
       ]
     });
     const userName = userDoc ? (userDoc.displayName || userDoc.name) : 'Thành viên';
@@ -718,3 +718,4 @@ router.post('/compare', async (req, res) => {
 });
 
 module.exports = router;
+

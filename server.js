@@ -6,6 +6,7 @@ const compression = require('compression');
 const path = require('path');
 const http = require('http');
 const { initBroadcastWorker } = require('./utils/broadcastWorker');
+const { initSocket } = require('./utils/socketManager');
 
 // Clean up environment variables (remove spaces/newlines)
 if (process.env.GROQ_API_KEY) process.env.GROQ_API_KEY = process.env.GROQ_API_KEY.trim();
@@ -24,11 +25,20 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Force no-cache to fix browser caching old JS files
+// Performance & Caching Policy
 app.use((req, res, next) => {
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
+    const ext = path.extname(req.path).toLowerCase();
+    const isStaticAsset = ['.js', '.css', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.woff', '.woff2', '.ttf'].includes(ext);
+    
+    if (isStaticAsset) {
+        // Cache static assets for 1 day
+        res.setHeader('Cache-Control', 'public, max-age=86400');
+    } else {
+        // API and HTML should not be cached to ensure fresh data
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+    }
     next();
 });
 
@@ -107,7 +117,10 @@ mongoose.connect(process.env.MONGODB_URI.trim())
         console.log('💼 Web Doanh Nghiệp: http://localhost:3002');
         console.log('✅ MongoDB connected');
         
-        app.listen(PORT, '0.0.0.0', () => {
+        const server = http.createServer(app);
+        initSocket(server);
+        
+        server.listen(PORT, '0.0.0.0', () => {
             startPortals();
             initBroadcastWorker(); // Khởi chạy trình gửi thông báo tự động
         }).on('error', (err) => {

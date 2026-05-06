@@ -29,6 +29,8 @@ const postSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
+postSchema.index({ userId: 1, createdAt: -1 });
+postSchema.index({ isPublic: 1, createdAt: -1 });
 postSchema.index({ createdAt: -1 });
 
 module.exports = mongoose.model('Post', postSchema);

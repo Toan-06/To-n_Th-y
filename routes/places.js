@@ -81,27 +81,36 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// Memory cache for business names to speed up place listing
+let cachedBizMap = null;
+let lastBizCacheTime = 0;
+const BIZ_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 // Lấy danh sách Address
 router.get('/', async (req, res) => {
   try {
-    // Chỉ lấy các địa điểm đã được phê duyệt
-    const [places, businesses] = await Promise.all([
-      Place.find({ status: 'approved' })
-           .select('id name region address meta text budget pace image images verified top favoritesCount ownerId lat lng transportTips priceFrom priceTo ratingAvg reviewCount kind description')
-           .lean(),
-      BusinessAccount.find().select('customId name displayName').lean()
-    ]);
+    const now = Date.now();
+    
+    // Refresh business cache if needed
+    if (!cachedBizMap || now - lastBizCacheTime > BIZ_CACHE_TTL) {
+        const businesses = await BusinessAccount.find().select('customId name displayName').lean();
+        const bizMap = new Map();
+        businesses.forEach(b => {
+          if (b.customId) bizMap.set(b.customId, b.displayName || b.name);
+          bizMap.set(b._id.toString(), b.displayName || b.name);
+        });
+        cachedBizMap = bizMap;
+        lastBizCacheTime = now;
+    }
 
-    // Map theo customId (vì Place.ownerId = BusinessAccount.customId)
-    const bizMap = new Map();
-    businesses.forEach(b => {
-      if (b.customId) bizMap.set(b.customId, b.displayName || b.name);
-      bizMap.set(b._id.toString(), b.displayName || b.name); // fallback _id
-    });
+    // Chỉ lấy các địa điểm đã được phê duyệt
+    const places = await Place.find({ status: 'approved' })
+           .select('id name region address meta text budget pace image images verified top favoritesCount ownerId lat lng transportTips priceFrom priceTo ratingAvg reviewCount kind description')
+           .lean();
 
     const data = places.map(p => ({
       ...p,
-      ownerName: p.ownerId ? (bizMap.get(p.ownerId) || 'Đối tác WanderViệt') : null
+      ownerName: p.ownerId ? (cachedBizMap.get(p.ownerId) || 'Đối tác WanderViệt') : null
     }));
 
     if (data && data.length > 0) {
@@ -159,7 +168,7 @@ router.post('/:id/favorite', auth, async (req, res) => {
 
     await place.save();
     if (place.ownerId) {
-      await syncBusinessXP(place.ownerId);
+      syncBusinessXP(place.ownerId).catch(err => console.error('BG Sync XP Error:', err));
     }
     
     res.json({ success: true, favoritesCount: place.favoritesCount });
@@ -189,7 +198,7 @@ router.post('/:id/review', auth, async (req, res) => {
     
     await place.save();
     if (place.ownerId) {
-      await syncBusinessXP(place.ownerId);
+      syncBusinessXP(place.ownerId).catch(err => console.error('BG Sync XP Error:', err));
     }
     
     res.json({ success: true, reviews: place.reviews, ratingAvg: place.ratingAvg, reviewCount: place.reviewCount });

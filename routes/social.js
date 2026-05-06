@@ -2,6 +2,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
 const router = express.Router();
 const { auth } = require('./auth');
 const Interaction = require('../models/Interaction');
@@ -14,6 +15,7 @@ const User = require('../models/User');
 const Message = require('../models/Message');
 const Group = require('../models/Group');
 const Story = require('../models/Story');
+const { emitToUser, sendNotification } = require('../utils/socketManager');
 
 // Multer config for media uploads
 const storage = multer.diskStorage({
@@ -25,11 +27,18 @@ const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 }, fileFil
   cb(null, allowed.test(path.extname(file.originalname).toLowerCase()));
 }});
 
-// Helper: resolve customId/string to MongoDB ObjectId
+// Helper: resolve customId/string to MongoDB ObjectId with caching
+const resolveCache = new Map();
 async function resolveUserId(idStr) {
+  if (!idStr || idStr === 'undefined' || idStr === 'null') return null;
   if (mongoose.Types.ObjectId.isValid(idStr)) return idStr;
+  
+  if (resolveCache.has(idStr)) return resolveCache.get(idStr);
+  
   const user = await User.findOne({ $or: [{ customId: idStr }, { id: idStr }] }).select('_id');
-  return user ? user._id.toString() : null;
+  const result = user ? user._id.toString() : null;
+  if (result) resolveCache.set(idStr, result);
+  return result;
 }
 
 // 1. LIKE / FAVORITE một dịch vụ
@@ -58,7 +67,7 @@ router.post('/like', auth, async (req, res) => {
       const place = await Place.findOne({ 
         $or: [
           { id: targetId },
-          { _id: mongoose.Types.ObjectId.isValid(targetId) ? targetId : new mongoose.Types.ObjectId() }
+          ...(mongoose.Types.ObjectId.isValid(targetId) ? [{ _id: targetId }] : [])
         ]
       });
       if (place) {
@@ -83,9 +92,7 @@ router.post('/like', auth, async (req, res) => {
       }
     } else if (targetType === 'post') {
       // XỬ LÝ LIKE CHO BÀI VIẾT (SOCIAL POST)
-      const post = await Post.findOne({ 
-        _id: mongoose.Types.ObjectId.isValid(targetId) ? targetId : new mongoose.Types.ObjectId()
-      });
+      const post = await Post.findOne({ _id: mongoose.Types.ObjectId.isValid(targetId) ? targetId : new mongoose.Types.ObjectId() });
       if (post) {
         if (!post.likes.includes(userId)) {
           post.likes.push(userId);
@@ -105,6 +112,15 @@ router.post('/like', auth, async (req, res) => {
               link: `/apps/user-web/social-hub.html`
             });
             await notification.save();
+            
+            // Real-time notify via socket
+            sendNotification(post.userId, {
+              type: 'like',
+              senderName: req.user.displayName || req.user.name,
+              senderAvatar: req.user.avatar || '',
+              message: `${req.user.displayName || req.user.name} đã thích bài viết của bạn.`,
+              relatedId: post._id
+            });
           }
         }
       }
@@ -247,7 +263,18 @@ router.post('/friends/request', auth, async (req, res) => {
     const existing = await Friendship.findOne({ $or: [{ requester: realId, recipient: realRecipientId }, { requester: realRecipientId, recipient: realId }] });
     if (existing) return res.status(400).json({ message: 'Lời mời đã tồn tại hoặc đã là bạn.' });
     await new Friendship({ requester: realId, recipient: realRecipientId, status: 'pending' }).save();
-    await new Notification({ recipientId: realRecipientId, recipientType: 'user', senderId: realId, senderName: req.user.displayName || req.user.name, type: 'system', title: 'Lời mời kết bạn mới! 👋', message: `${req.user.displayName || req.user.name} muốn kết bạn với bạn.`, link: '/apps/user-web/social-hub.html' }).save();
+    const notif = new Notification({ recipientId: realRecipientId, recipientType: 'user', senderId: realId, senderName: req.user.displayName || req.user.name, type: 'system', title: 'Lời mời kết bạn mới! 👋', message: `${req.user.displayName || req.user.name} muốn kết bạn với bạn.`, link: '/apps/user-web/social-hub.html' });
+    await notif.save();
+    
+    // Real-time notify via socket
+    sendNotification(realRecipientId, {
+      type: 'friend_request',
+      senderId: realId,
+      senderName: req.user.displayName || req.user.name,
+      senderAvatar: req.user.avatar || '',
+      message: `${req.user.displayName || req.user.name} muốn kết bạn với bạn.`
+    });
+    
     res.json({ success: true, message: 'Đã gửi lời mời kết bạn!' });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
@@ -269,6 +296,17 @@ router.post('/posts/:id/comment', auth, async (req, res) => {
     };
     post.comments.push(comment);
     await post.save();
+    
+    // Real-time notify via socket
+    if (post.userId.toString() !== realId.toString()) {
+      sendNotification(post.userId, {
+        type: 'comment',
+        senderName: req.user.displayName || req.user.name,
+        message: `${req.user.displayName || req.user.name} đã bình luận bài viết của bạn: "${text.substring(0, 30)}..."`,
+        relatedId: post._id
+      });
+    }
+    
     res.json({ success: true, comment });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
@@ -360,7 +398,8 @@ router.get('/users/search', auth, async (req, res) => {
 router.get('/posts/user/:userId', auth, async (req, res) => {
   try {
     const targetId = await resolveUserId(req.params.userId);
-    const posts = await Post.find({ userId: targetId || req.params.userId }).sort({ createdAt: -1 }).limit(50);
+    if (!targetId) return res.json({ success: true, data: [] });
+    const posts = await Post.find({ userId: targetId }).sort({ createdAt: -1 }).limit(50);
     res.json({ success: true, data: posts });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
@@ -445,6 +484,17 @@ router.post('/messages/send', auth, async (req, res) => {
     const conversationId = `dm_${ids[0]}_${ids[1]}`;
     const msg = new Message({ conversationId, senderId: realId, senderName: req.user.displayName || req.user.name, senderAvatar: req.user.avatar || '', text, readBy: [realId] });
     await msg.save();
+
+    // Real-time emit via socket
+    emitToUser(realRecipientId, 'receive_message', {
+      senderId: realId,
+      senderName: req.user.displayName || req.user.name,
+      senderAvatar: req.user.avatar || '',
+      text,
+      conversationId,
+      createdAt: msg.createdAt
+    });
+
     res.json({ success: true, message: msg });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
@@ -519,6 +569,8 @@ router.get('/stories', auth, async (req, res) => {
           avatar: s.userId.avatar
         };
       }
+      obj.likeCount = s.likes ? s.likes.length : 0;
+      obj.isLiked = s.likes ? s.likes.some(id => id.toString() === realId) : false;
       return obj;
     });
 
@@ -538,15 +590,100 @@ router.post('/stories', auth, upload.single('media'), async (req, res) => {
       type: req.file.mimetype.startsWith('video') ? 'video' : 'image'
     };
 
-    const story = new Story({
+    const storyData = {
       userId: realId,
       media: [media]
-    });
+    };
+
+    if (req.body.musicName) {
+      storyData.music = {
+        name: req.body.musicName,
+        author: req.body.musicAuthor || 'Nhiều tác giả',
+        url: req.body.musicUrl || ''
+      };
+    }
+
+    if (req.body.textOverlay) {
+      storyData.textOverlay = {
+        content: req.body.textOverlay,
+        color: req.body.textColor || '#ffffff',
+        top: req.body.textTop || '50%',
+        left: req.body.textLeft || '50%'
+      };
+    }
+
+    const story = new Story(storyData);
     await story.save();
-    res.json({ success: true, data: story });
+    res.json({ success: true, data: { ...story.toObject(), likeCount: 0, isLiked: false } });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
+});
+
+router.post('/stories/:id/like', auth, async (req, res) => {
+  try {
+    const realId = await resolveUserId(req.user.id);
+    const story = await Story.findById(req.params.id);
+    if (!story) return res.status(404).json({ message: 'Không tìm thấy thước phim' });
+
+    const index = story.likes.indexOf(realId);
+    if (index > -1) {
+      story.likes.splice(index, 1);
+    } else {
+      story.likes.push(realId);
+    }
+
+    await story.save();
+    res.json({ success: true, liked: index === -1, count: story.likes.length });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// GET /api/social/search - Global search
+router.get('/search', auth, async (req, res) => {
+    try {
+        const query = req.query.q;
+        if (!query || query.length < 2) return res.json({ success: true, data: [] });
+
+        const searchRegex = new RegExp(query, 'i');
+
+        // 1. Search Users
+        const users = await User.find({
+            $or: [{ name: searchRegex }, { displayName: searchRegex }]
+        }).select('name displayName avatar rank').limit(5);
+
+        // 2. Search Posts (by content or location)
+        const posts = await Post.find({
+            $or: [{ content: searchRegex }, { 'location.name': searchRegex }]
+        }).populate('userId', 'name avatar').limit(5);
+
+        // 3. Search Groups (Communities)
+        const groups = await Group.find({
+            $or: [{ name: searchRegex }, { description: searchRegex }]
+        }).limit(8);
+
+        // 4. Search Places (Destinations)
+        const places = await Place.find({
+            $or: [{ name: searchRegex }, { region: searchRegex }, { description: searchRegex }]
+        }).limit(8);
+
+        // Format results
+        const results = [
+            ...users.map(u => ({ type: 'user', id: u._id, title: u.displayName || u.name, subtitle: u.rank || 'Thành viên', avatar: u.avatar })),
+            ...posts.map(p => ({ type: 'post', id: p._id, title: p.content.substring(0, 60) + '...', subtitle: p.location?.name || 'Bài viết', avatar: p.userId?.avatar })),
+            ...groups.map(g => ({ type: 'community', id: g._id, title: g.name, subtitle: `${g.members?.length || 0} thành viên`, avatar: g.avatar || '' })),
+            ...places.map(p => ({ type: 'destination', id: p._id, title: p.name, subtitle: p.region || 'Điểm đến', avatar: p.image || (p.images && p.images[0]) || '' }))
+        ];
+
+        res.json({ success: true, data: results });
+    } catch (err) {
+        const errorLog = `[${new Date().toISOString()}] Search Error: ${err.stack}\n`;
+        try {
+            fs.appendFileSync(path.join(__dirname, '..', 'scratch', 'server_error.log'), errorLog);
+        } catch (e) {}
+        res.status(500).json({ success: false, message: 'Lỗi tìm kiếm: ' + err.message });
+    }
 });
 
 // 31. REACTION ROUTES
@@ -571,6 +708,16 @@ router.post('/posts/:id/reaction', auth, async (req, res) => {
     // Mark modified for Map types in Mongoose
     post.markModified('reactions');
     await post.save();
+
+    // Real-time notify via socket
+    if (post.userId.toString() !== realUserId.toString()) {
+      sendNotification(post.userId, {
+        type: 'reaction',
+        senderName: req.user.displayName || req.user.name,
+        message: `${req.user.displayName || req.user.name} đã bày tỏ cảm xúc với bài viết của bạn.`,
+        relatedId: post._id
+      });
+    }
 
     res.json({ success: true });
   } catch (err) {
@@ -601,3 +748,4 @@ router.delete('/posts/:id/reaction', auth, async (req, res) => {
 });
 
 module.exports = router;
+
