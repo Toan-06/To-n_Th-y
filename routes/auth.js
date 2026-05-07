@@ -62,7 +62,11 @@ function setInCache(id, portal, user) {
 }
 
 const verifyPortalToken = (expectedPortal) => async (req, res, next) => {
-  const token = req.header('x-auth-token');
+  let token = req.header('x-auth-token');
+  if (!token && req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+    token = req.headers.authorization.split(' ')[1];
+  }
+
   if (!token || token === 'null' || token === 'undefined') {
     if (expectedPortal === null) return next(); 
     return res.status(401).json({ success: false, message: 'Không có token, từ chối quyền truy cập' });

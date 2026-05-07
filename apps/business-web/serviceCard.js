@@ -67,41 +67,37 @@
     /* Badge trạng thái */
     .svc-badge {
       position: absolute;
-      top: 10px;
-      left: 10px;
-      padding: 4px 10px;
-      border-radius: 20px;
+      top: 12px;
+      left: 12px;
+      padding: 5px 12px;
+      border-radius: 8px;
       font-size: 11px;
-      font-weight: 700;
+      font-weight: 800;
       color: #fff;
-      letter-spacing: 0.2px;
+      z-index: 10;
       border: none;
-      outline: none;
-      cursor: pointer;
-      appearance: none;
-      -webkit-appearance: none;
-      font-family: inherit;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     }
-    .svc-badge:hover { filter: brightness(1.1); }
-    .svc-badge option { color: #1a1a2e; background: #fff; font-weight: 500; }
     .svc-badge--active  { background: #22c55e; }
     .svc-badge--pending { background: #f59e0b; }
-    .svc-badge--paused  { background: #94a3b8; }
+    .svc-badge--paused  { background: #64748b; }
 
     /* Loại dịch vụ (type chip) */
     .svc-type-chip {
       position: absolute;
-      top: 10px;
-      right: 10px;
-      background: rgba(255,255,255,0.9);
-      color: #764ba2;
+      top: 12px;
+      right: 12px;
+      background: rgba(255, 255, 255, 0.9);
+      color: #64748b;
       font-size: 10px;
-      font-weight: 700;
-      padding: 3px 9px;
-      border-radius: 20px;
+      font-weight: 800;
+      padding: 4px 10px;
+      border-radius: 8px;
       text-transform: uppercase;
       letter-spacing: 0.5px;
-      backdrop-filter: blur(4px);
+      backdrop-filter: blur(8px);
+      z-index: 10;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }
 
     /* Body */
@@ -255,22 +251,21 @@ function renderSkeletonServices(containerId = 'service-grid', count = 8) {
 //  Hàm tạo HTML một card
 // ─────────────────────────────────────────
 function _createCardHTML(svc) {
+  const badgeText = _badgeLabel(svc.status);
+  const badgeClass = _badgeClass(svc.status);
+  
   return `
     <div class="svc-card" data-id="${svc.id}">
       <div class="svc-card__img">
         <img src="${svc.image}" alt="${svc.name}" loading="lazy">
-        <select class="svc-badge ${_badgeClass(svc.status)}" onchange="updateServiceStatus('${svc.id}', this.value)" onclick="event.stopPropagation()">
-          <option value="active" ${svc.status === 'active' ? 'selected' : ''}>Đang hoạt động</option>
-          <option value="pending" ${svc.status === 'pending' ? 'selected' : ''}>Chờ duyệt</option>
-          <option value="paused" ${svc.status === 'paused' ? 'selected' : ''}>Tạm dừng</option>
-        </select>
+        <div class="svc-badge ${badgeClass}">${badgeText}</div>
         <div class="svc-type-chip">${svc.type}</div>
       </div>
       <div class="svc-card__body">
         <div class="svc-card__name">${svc.name}</div>
         <div class="svc-card__loc">📍 ${svc.location}</div>
         <div class="svc-card__price">
-          ${_formatPrice(svc.price)}<span>VND / ${svc.unit}</span>
+          ${_formatPrice(svc.price)} <span>VND / ${svc.unit}</span>
         </div>
         <div class="svc-card__foot">
           <div class="svc-rating">${_ratingStars(svc.rating)}</div>

@@ -1,6 +1,8 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
 const Place = require('./models/Place');
+const Service = require('./server/models/Service');
+const User = require('./server/models/User');
 
 const PLACES = [
   {
@@ -396,17 +398,45 @@ async function importPlaces() {
 
     let added = 0, updated = 0, skipped = 0;
 
+    // Lấy một tài khoản doanh nghiệp mặc định để gán cho các dịch vụ nếu chưa có owner
+    let defaultOwner = await User.findOne({ role: 'business' });
+    if (!defaultOwner) {
+      // Tạo một owner tạm thời nếu chưa có bất kỳ business nào trong DB mới
+      defaultOwner = { _id: new mongoose.Types.ObjectId() }; 
+    }
+
     for (const placeData of PLACES) {
-      const existing = await Place.findOne({ id: placeData.id });
-      if (existing) {
-        // Cập nhật nếu đã tồn tại
+      // 1. Đồng bộ sang Place (Hệ thống cũ)
+      const existingPlace = await Place.findOne({ id: placeData.id });
+      if (existingPlace) {
         await Place.findOneAndUpdate({ id: placeData.id }, placeData, { runValidators: true });
         updated++;
-        console.log(`  🔄 Đã cập nhật: ${placeData.name}`);
+        console.log(`  🔄 [Legacy] Cập nhật: ${placeData.name}`);
       } else {
         await new Place(placeData).save();
         added++;
-        console.log(`  ➕ Đã thêm mới: ${placeData.name}`);
+        console.log(`  ➕ [Legacy] Thêm mới: ${placeData.name}`);
+      }
+
+      // 2. Đồng bộ sang Service (Hệ thống mới cho Business Dashboard)
+      const serviceData = {
+        name: placeData.name,
+        price: placeData.priceFrom || 1000000,
+        location: placeData.region,
+        category: placeData.isTour ? 'tour' : 'restaurant', // Mặc định
+        status: 'active',
+        image: placeData.image,
+        owner: placeData.ownerId || defaultOwner._id,
+        legacyId: placeData.id // Khóa chính để ánh xạ từ User Portal
+      };
+
+      const existingService = await Service.findOne({ legacyId: placeData.id });
+      if (existingService) {
+        await Service.findOneAndUpdate({ legacyId: placeData.id }, serviceData);
+        console.log(`  🔄 [New API] Đồng bộ Service: ${placeData.name}`);
+      } else {
+        await new Service(serviceData).save();
+        console.log(`  ➕ [New API] Tạo Service mới: ${placeData.name}`);
       }
     }
 

@@ -1,161 +1,98 @@
-// ============================================================
-//  MOCK DATA — Hệ thống quản lý dịch vụ du lịch
-//  File: mockData.js
-//  Sử dụng: <script src="mockData.js"></script>
-// ============================================================
-
-// ─────────────────────────────────────────
-//  1. DANH SÁCH DỊCH VỤ
-// ─────────────────────────────────────────
-const services = [];
-
-// ─────────────────────────────────────────
-//  2. DANH SÁCH ĐƠN ĐẶT CHỖ
-// ─────────────────────────────────────────
-const bookings = [];
-
-// ─────────────────────────────────────────
-//  3. CÁC HÀM TRUY VẤN DỮ LIỆU
-// ─────────────────────────────────────────
-
-/** Lấy toàn bộ dịch vụ */
-function getAllServices() {
-  return services;
-}
-
-/** Lấy dịch vụ đang hoạt động */
-function getActiveServices() {
-  return services.filter(s => s.status === 'active');
-}
-
-/** Lấy dịch vụ đang chờ duyệt */
-function getPendingServices() {
-  return services.filter(s => s.status === 'pending');
-}
-
-/** Lấy dịch vụ đã tạm dừng */
-function getPausedServices() {
-  return services.filter(s => s.status === 'paused');
-}
-
-/** Lấy toàn bộ đơn đặt chỗ */
-function getBookings() {
-  return bookings;
-}
-
-/** Lấy đơn đặt chỗ theo trạng thái */
-function getBookingsByStatus(status) {
-  return bookings.filter(b => b.status === status);
-}
-
-/** Lấy dịch vụ theo loại */
-function getServicesByType(type) {
-  return services.filter(s => s.type === type);
-}
-
-// ─────────────────────────────────────────
-//  4. HÀM RENDER CARD DỊCH VỤ
-// ─────────────────────────────────────────
-
-const STATUS_LABEL = {
-  active:  { text: 'Đang hoạt động', cls: 's-green' },
-  pending: { text: 'Chờ duyệt',       cls: 's-yellow' },
-  paused:  { text: 'Tạm dừng',        cls: 's-gray' }
-};
-
-const BOOKING_STATUS_LABEL = {
-  confirmed: { text: 'Đã xác nhận',  cls: 'st-green' },
-  pending:   { text: 'Chờ xác nhận', cls: 'st-yellow' },
-  cancelled: { text: 'Đã hủy',       cls: 'st-red' }
-};
-
 /**
- * Render danh sách card dịch vụ vào một container
- * @param {HTMLElement|string} container - DOM element hoặc CSS selector
- * @param {Array} data - Mảng dịch vụ (mặc định: tất cả)
+ * mockData.js
+ * Centralized mock data for WanderViệt Business Dashboard.
  */
-function renderServiceCards(container, data = getAllServices()) {
-  const el = typeof container === 'string'
-    ? document.querySelector(container)
-    : container;
-  if (!el) return;
 
-  const fmt = new Intl.NumberFormat('vi-VN');
+// 1. DANH SÁCH DỊCH VỤ (Services)
+const services = [
+    {
+        id: 'svc-101',
+        name: 'Khách sạn Silk Path Grand Resort',
+        type: 'hotel',
+        price: 3200000,
+        unit: 'đêm',
+        location: 'Sapa, Lào Cai',
+        status: 'active',
+        createdDate: '2024-01-15',
+        image: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=600',
+        rating: 4.9,
+        bookings: 124,
+        capacity: 50
+    },
+    {
+        id: 'svc-102',
+        name: 'Tour du thuyền Heritage Bình Chuẩn',
+        type: 'tour',
+        price: 4500000,
+        unit: 'người',
+        location: 'Hạ Long, Quảng Ninh',
+        status: 'active',
+        createdDate: '2024-02-10',
+        image: 'https://images.unsplash.com/photo-1528127269322-539801943592?w=600',
+        rating: 4.8,
+        bookings: 89,
+        capacity: 20
+    }
+];
 
-  el.innerHTML = data.map(svc => {
-    const st = STATUS_LABEL[svc.status] || STATUS_LABEL.paused;
-    const stars = svc.rating > 0
-      ? `⭐ ${svc.rating} (${svc.bookings})`
-      : '⭐ Chưa có đánh giá';
-    return `
-      <div class="svc-card" data-id="${svc.id}">
-        <div class="svc-img">
-          <img src="${svc.image}" alt="${svc.name}" loading="lazy">
-          <div class="svc-status ${st.cls}">${st.text}</div>
-        </div>
-        <div class="svc-body">
-          <div class="svc-name">${svc.name}</div>
-          <div class="svc-loc">📍 ${svc.location}</div>
-          <div class="svc-price">${fmt.format(svc.price)} <span>VND / ${svc.unit}</span></div>
-          <div class="svc-meta">
-            <span>${stars}</span>
-            <span>Đã đặt: ${svc.bookings}</span>
-          </div>
-        </div>
-      </div>`;
-  }).join('');
+// 2. DANH SÁCH ĐƠN HÀNG (Orders / Bookings)
+const bookings = [
+    { id: 'BK-1001', customerName: 'Nguyễn Anh Tuấn', phone: '0901234567', serviceName: 'Tour du thuyền Heritage Bình Chuẩn', date: '2024-05-01', amount: 9000000, guests: 2, status: 'confirmed' },
+    { id: 'BK-1002', customerName: 'Lê Thị Mai', phone: '0912345678', serviceName: 'Khách sạn Silk Path Grand Resort', date: '2024-05-01', amount: 3200000, guests: 1, status: 'completed' },
+    { id: 'BK-1003', customerName: 'Trần Hoàng Nam', phone: '0987654321', serviceName: 'Nhà hàng Ngon Garden - Ẩm thực Việt', date: '2024-05-02', amount: 1800000, guests: 4, status: 'pending' }
+];
+
+// 3. TIN NHẮN & HỘI THOẠI (Messages & Conversations)
+const conversations = [
+    { 
+        id: 'conv-1', 
+        customerName: 'Nguyễn Anh Tuấn', 
+        avatar: 'https://i.pravatar.cc/150?u=tuan',
+        lastMessage: 'Tôi muốn đặt thêm 1 người nữa được không?', 
+        time: '10:45',
+        status: 'online'
+    },
+    { 
+        id: 'conv-2', 
+        customerName: 'Lê Thị Mai', 
+        avatar: 'https://i.pravatar.cc/150?u=mai',
+        lastMessage: 'Cảm ơn bạn, dịch vụ rất tuyệt vời!', 
+        time: '09:30',
+        status: 'offline'
+    },
+    { 
+        id: 'conv-3', 
+        customerName: 'Trần Hoàng Nam', 
+        avatar: 'https://i.pravatar.cc/150?u=nam',
+        lastMessage: 'Khách sạn có chỗ đỗ xe hơi không ạ?', 
+        time: 'Hôm qua',
+        status: 'online'
+    }
+];
+
+const messages = [
+    // Conversation 1
+    { id: 'm1', conversationId: 'conv-1', sender: 'customer', content: 'Chào bạn, tôi đã đặt tour du thuyền bên mình.', time: '10:30' },
+    { id: 'm2', conversationId: 'conv-1', sender: 'business', content: 'Chào anh Tuấn, WanderViệt đã nhận được đơn hàng của anh ạ. Em có thể hỗ trợ gì thêm không?', time: '10:32' },
+    { id: 'm3', conversationId: 'conv-1', sender: 'customer', content: 'Tôi muốn đặt thêm 1 người nữa được không?', time: '10:45' },
+    
+    // Conversation 2
+    { id: 'm4', conversationId: 'conv-2', sender: 'customer', content: 'Khách sạn Silk Path có phục vụ ăn sáng tại phòng không bạn?', time: '09:00' },
+    { id: 'm5', conversationId: 'conv-2', sender: 'business', content: 'Chào chị Mai, bên em có phục vụ bữa sáng tại phòng từ 6h đến 10h hàng ngày ạ.', time: '09:15' },
+    { id: 'm6', conversationId: 'conv-2', sender: 'customer', content: 'Cảm ơn bạn, dịch vụ rất tuyệt vời!', time: '09:30' },
+
+    // Conversation 3
+    { id: 'm7', conversationId: 'conv-3', sender: 'customer', content: 'Khách sạn có chỗ đỗ xe hơi không ạ?', time: '18:20' }
+];
+
+// 4. CÁC HÀM TRUY VẤN DỮ LIỆU
+function getAllServices() { return services; }
+function getBookings() { return bookings; }
+function getConversations() { return conversations; }
+function getMessages(convId) { 
+    return messages.filter(m => m.conversationId === convId); 
 }
 
-/**
- * Render bảng đơn đặt chỗ vào một container
- * @param {HTMLElement|string} container - DOM element hoặc CSS selector
- * @param {Array} data - Mảng đơn đặt (mặc định: tất cả)
- */
-function renderBookingsTable(container, data = getBookings()) {
-  const el = typeof container === 'string'
-    ? document.querySelector(container)
-    : container;
-  if (!el) return;
-
-  const fmt = new Intl.NumberFormat('vi-VN');
-
-  el.innerHTML = `
-    <table>
-      <thead>
-        <tr>
-          <th>Mã đơn</th>
-          <th>Khách hàng</th>
-          <th>Dịch vụ</th>
-          <th>Ngày đặt</th>
-          <th>Ngày sử dụng</th>
-          <th>Giá trị</th>
-          <th>Trạng thái</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${data.map(b => {
-          const st = BOOKING_STATUS_LABEL[b.status] || BOOKING_STATUS_LABEL.pending;
-          return `
-            <tr>
-              <td>${b.id}</td>
-              <td>${b.customerName}</td>
-              <td>${b.serviceName}</td>
-              <td>${b.bookingDate}</td>
-              <td>${b.useDate}</td>
-              <td>${fmt.format(b.value)} VND</td>
-              <td><span class="st ${st.cls}">${st.text}</span></td>
-            </tr>`;
-        }).join('')}
-      </tbody>
-    </table>`;
-}
-
-// Export cho môi trường Node/module (nếu cần)
 if (typeof module !== 'undefined') {
-  module.exports = {
-    services, bookings,
-    getAllServices, getActiveServices, getPendingServices,
-    getPausedServices, getBookings, getBookingsByStatus,
-    getServicesByType, renderServiceCards, renderBookingsTable
-  };
+    module.exports = { services, bookings, conversations, messages, getAllServices, getBookings, getConversations, getMessages };
 }

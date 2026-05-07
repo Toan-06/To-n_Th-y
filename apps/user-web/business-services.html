@@ -356,6 +356,37 @@
         <button type="submit" id="bk-submit-btn" style="width:100%;padding:1rem;background:linear-gradient(135deg,#f59e0b,#d97706);color:white;border:none;border-radius:12px;font-weight:800;font-size:1rem;cursor:pointer;">🚀 XÁC NHẬN ĐẶT CHỖ</button>
         <p style="text-align:center;font-size:.78rem;color:#64748b;margin-top:.75rem;">Bên doanh nghiệp sẽ liên hệ xác nhận trong vòng 24h</p>
       </form>
+
+      <!-- Reviews Section -->
+      <div style="margin-top:2.5rem;padding-top:1.5rem;border-top:1px solid rgba(255,255,255,.1);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+            <h4 style="margin:0;color:#fff;font-size:1.1rem;font-family:'Outfit',sans-serif;">🌟 Đánh giá & Bình luận</h4>
+            <div id="bk-rating-avg" style="background:rgba(245,158,11,.1);color:#fbbf24;padding:.3rem .6rem;border-radius:8px;font-weight:800;font-size:.9rem;">—</div>
+        </div>
+        <div id="bk-reviews-list" style="max-height:250px;overflow-y:auto;display:flex;flex-direction:column;gap:1rem;padding-right:.5rem;">
+            <div style="text-align:center;color:#64748b;font-size:.85rem;padding:1rem;">Chưa có đánh giá nào cho dịch vụ này.</div>
+        </div>
+        
+        <!-- Add Review Form (Hidden by default) -->
+        <div id="bk-add-review-wrap" style="margin-top:1.5rem; display:none;">
+            <div style="background:rgba(99,102,241,.08); border:1px dashed rgba(99,102,241,.3); border-radius:16px; padding:1.2rem;">
+                <div style="font-weight:700; color:#fff; font-size:.9rem; margin-bottom:.75rem;">Viết đánh giá của bạn</div>
+                <div style="display:flex; gap:.5rem; margin-bottom:1rem; color:#fbbf24; font-size:1.5rem;" id="bk-star-selector">
+                    <span style="cursor:pointer" onclick="setBkReviewStars(1)">★</span>
+                    <span style="cursor:pointer" onclick="setBkReviewStars(2)">★</span>
+                    <span style="cursor:pointer" onclick="setBkReviewStars(3)">★</span>
+                    <span style="cursor:pointer" onclick="setBkReviewStars(4)">★</span>
+                    <span style="cursor:pointer" onclick="setBkReviewStars(5)">★</span>
+                </div>
+                <textarea id="bk-review-comment" placeholder="Bạn cảm thấy dịch vụ này thế nào?..." style="width:100%; padding:.75rem; border-radius:10px; border:1px solid rgba(255,255,255,.12); background:rgba(255,255,255,.04); color:#fff; font-size:.85rem; resize:none; margin-bottom:1rem;"></textarea>
+                <div style="display:flex; gap:.5rem;">
+                    <button onclick="submitBkReview()" style="flex:1; padding:.6rem; background:#6366f1; color:#fff; border:none; border-radius:8px; font-weight:700; cursor:pointer;">Gửi ngay</button>
+                    <button onclick="toggleBkReviewForm(false)" style="padding:.6rem 1rem; background:rgba(255,255,255,.05); color:#94a3b8; border:none; border-radius:8px; font-weight:700; cursor:pointer;">Hủy</button>
+                </div>
+            </div>
+        </div>
+        <button id="bk-toggle-review-btn" onclick="toggleBkReviewForm(true)" style="width:100%; margin-top:1rem; padding:.75rem; background:transparent; border:1px solid rgba(255,255,255,.1); border-radius:10px; color:#94a3b8; font-size:.85rem; font-weight:700; cursor:pointer; transition:all .2s;">+ Viết bình luận của bạn</button>
+      </div>
     </div>
   </div>
 
@@ -430,7 +461,95 @@
     }
     document.getElementById('bk-error').style.display='none';
     document.getElementById('booking-modal').style.display='flex';
+
+    // Render Reviews
+    renderModalReviews(place);
+    toggleBkReviewForm(false);
   };
+
+  var _bkReviewStars = 5;
+  function setBkReviewStars(n) {
+    _bkReviewStars = n;
+    const stars = document.querySelectorAll('#bk-star-selector span');
+    stars.forEach((s, i) => {
+        s.style.color = i < n ? '#fbbf24' : 'rgba(255,255,255,.1)';
+    });
+  }
+
+  function toggleBkReviewForm(show) {
+    document.getElementById('bk-add-review-wrap').style.display = show ? 'block' : 'none';
+    document.getElementById('bk-toggle-review-btn').style.display = show ? 'none' : 'block';
+    if(show) setBkReviewStars(5);
+  }
+
+  function submitBkReview() {
+    const token = localStorage.getItem('wander_token');
+    if (!token) { alert('Vui lòng đăng nhập để gửi đánh giá!'); return; }
+    
+    const comment = document.getElementById('bk-review-comment').value.trim();
+    if(!comment) { alert('Vui lòng nhập bình luận!'); return; }
+    
+    const btn = document.querySelector('#bk-add-review-wrap button');
+    btn.disabled = true; btn.textContent = '⌛ Đang gửi...';
+
+    const payload = {
+        serviceId: _bkPlace.id || _bkPlace._id,
+        rating: _bkReviewStars,
+        comment: comment
+    };
+
+    fetch('/api/reviews', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-auth-token': token },
+        body: JSON.stringify(payload)
+    }).then(r => r.json())
+      .then(json => {
+        btn.disabled = false; btn.textContent = 'Gửi ngay';
+        if (json.success) {
+            // Optimistically update the list
+            if(!_bkPlace.reviews) _bkPlace.reviews = [];
+            _bkPlace.reviews.unshift(json.data || { userName: 'Bạn', rating: _bkReviewStars, comment: comment });
+            
+            renderModalReviews(_bkPlace);
+            toggleBkReviewForm(false);
+            document.getElementById('bk-review-comment').value = '';
+            if (window.WanderUI) WanderUI.showToast('✅ Đã gửi đánh giá thành công!','success');
+        } else {
+            alert(json.message || 'Lỗi khi gửi đánh giá.');
+        }
+      }).catch(err => {
+        btn.disabled = false; btn.textContent = 'Gửi ngay';
+        alert('Lỗi kết nối máy chủ.');
+      });
+  }
+
+  function renderModalReviews(place) {
+    const list = document.getElementById('bk-reviews-list');
+    const avgEl = document.getElementById('bk-rating-avg');
+    const ratingVal = parseFloat(place.ratingAvg) || 0;
+    
+    avgEl.textContent = ratingVal > 0 ? '⭐ ' + ratingVal : 'Mới';
+    
+    // In a real app, you'd fetch reviews by placeId. Here we use mock if empty.
+    const reviews = place.reviews || [];
+    if (reviews.length === 0) {
+        list.innerHTML = `<div style="text-align:center;color:#64748b;font-size:.85rem;padding:2rem 1rem;">
+            <div style="font-size:2rem;margin-bottom:.5rem;">✨</div>
+            Hãy là người đầu tiên đặt và đánh giá dịch vụ này!
+        </div>`;
+        return;
+    }
+
+    list.innerHTML = reviews.map(r => `
+        <div style="background:rgba(255,255,255,.03);padding:1rem;border-radius:14px;border:1px solid rgba(255,255,255,.05);">
+            <div style="display:flex;justify-content:space-between;margin-bottom:.5rem;">
+                <div style="font-weight:700;color:#fff;font-size:.85rem;">${r.userName || 'Khách hàng'}</div>
+                <div style="color:#fbbf24;font-size:.8rem;">${'★'.repeat(r.rating)}${'☆'.repeat(5-r.rating)}</div>
+            </div>
+            <p style="margin:0;color:#94a3b8;font-size:.85rem;line-height:1.5;">${r.comment}</p>
+        </div>
+    `).join('');
+  }
 
   function updateBkTotal() {
     if (!_bkPlace || !_bkPlace.priceFrom) return;

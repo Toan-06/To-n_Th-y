@@ -48,8 +48,10 @@ export default function Auth({ onLoginSuccess }) {
 
       if (data.success) {
         if (rememberMe) {
-          localStorage.setItem('biz_token', data.token);
+          localStorage.setItem('token', data.token);
+          localStorage.setItem('biz_token', data.token); // Keep for backward compatibility
         } else {
+          sessionStorage.setItem('token', data.token);
           sessionStorage.setItem('biz_token', data.token);
         }
         onLoginSuccess(data.user);

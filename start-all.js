@@ -1,7 +1,7 @@
 const { execSync, spawn } = require('child_process');
 
-console.log('🧹 Đang dọn dẹp các cổng mạng bị kẹt (3000, 3001, 3002)...');
-const ports = [3000, 3001, 3002];
+console.log('🧹 Đang dọn dẹp các cổng mạng bị kẹt (3000, 3001, 3002, 5000)...');
+const ports = [3000, 3001, 3002, 5000];
 
 ports.forEach(port => {
     try {
@@ -29,20 +29,30 @@ ports.forEach(port => {
     }
 });
 
-console.log('\n🚀 Đang khởi động TOÀN BỘ hệ thống (Server + Admin + Business)...');
+console.log('\n🚀 Đang khởi động TOÀN BỘ hệ thống (Legacy Server + New API Backend)...');
 const server = spawn('node', ['server.js'], { 
     stdio: 'inherit', 
     env: { ...process.env, NODE_OPTIONS: '--max-http-header-size=131072' }
 });
 
+const backendAPI = spawn('node', ['server/server.js'], {
+    stdio: 'inherit',
+    env: { ...process.env }
+});
+
 server.on('exit', (code) => {
-    console.log(`\n⚠️ Server đã dừng với mã thoát ${code}`);
+    console.log(`\n⚠️ Legacy Server đã dừng với mã thoát ${code}`);
     process.exit(code);
+});
+
+backendAPI.on('exit', (code) => {
+    console.log(`\n⚠️ New Backend API đã dừng với mã thoát ${code}`);
 });
 
 process.on('SIGINT', () => {
     console.log('\n🛑 Đang dừng hệ thống...');
     server.kill();
+    backendAPI.kill();
     process.exit();
 });
 
