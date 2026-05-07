@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Auth from './Auth';
 import { authService } from './authService';
+import ChatBot from './components/ChatBot';
 
 const EMPTY_FORM = {
   name: '',
@@ -255,6 +256,9 @@ export default function BusinessDashboard() {
           <button className={`biz-nav-item ${activeSection === 'preview' ? 'is-active' : ''}`} onClick={() => setActiveSection('preview')}>
             Xem trước người dùng
           </button>
+          <button className={`biz-nav-item ${activeSection === 'messages' ? 'is-active' : ''}`} onClick={() => setActiveSection('messages')}>
+            Chăm sóc khách hàng
+          </button>
         </nav>
         <div style={{ padding: '1.5rem' }}>
           <button onClick={handleLogout} className="btn-biz btn-biz--danger" style={{ width: '100%', justifyContent: 'center' }}>Đăng xuất</button>
@@ -378,6 +382,16 @@ export default function BusinessDashboard() {
                   <p style={{ padding: '1rem', color: 'var(--biz-text-muted)' }}>Bạn chưa có dịch vụ nào được duyệt.</p>
                 )}
               </div>
+            </div>
+          )}
+
+          {activeSection === 'messages' && (
+            <div className="biz-panel" style={{ padding: '0', overflow: 'hidden' }}>
+              <div style={{ padding: '24px 24px 0' }}>
+                <h2 className="biz-panel-title">Trợ lý ảo AI - Chăm sóc khách hàng</h2>
+                <p className="section-copy">Hệ thống AI tự động trả lời các thắc mắc cơ bản của khách hàng về dịch vụ của bạn.</p>
+              </div>
+              <ChatBot mode="embedded" />
             </div>
           )}
         </div>

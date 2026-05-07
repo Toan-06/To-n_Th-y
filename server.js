@@ -19,11 +19,6 @@ const PORT = 3000;
 const app = express();
 app.set('trust proxy', true);
 
-// Bỏ log request raw để terminal gọn hơn (chỉ hiện info chính)
-// app.use((req, res, next) => {
-//     console.log('>>> [RAW] Request:', req.method, req.url);
-//     next();
-// });
 
 app.use(compression()); // Bật nén dữ liệu
 app.use(cors({ origin: true, credentials: true }));

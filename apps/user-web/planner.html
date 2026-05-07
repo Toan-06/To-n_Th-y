@@ -10,8 +10,8 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=Outfit:wght@500;600;700&display=swap"
     rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=1776819067182" />
-  <link rel="stylesheet" href="planner.css?v=1776819067182" />
+  <link rel="stylesheet" href="styles.css?v=4" />
+  <link rel="stylesheet" href="planner.css?v=20260507n" />
 </head>
 
 <body>
@@ -76,141 +76,242 @@
   </header>
 
   <main class="planner-main-wrapper">
+
     <div class="planner-container">
       
       <!-- FORM NHẬP LIỆU - Bước 1 và Bước 2 -->
       <aside class="planner-form-card">
-        <h1 class="planner-form-title">
-          <span style="font-size: 2rem;">✨</span> Thiết Kế Lịch Trình AI
-        </h1>
-        <p style="color: var(--text-muted); margin-bottom: 2rem; line-height: 1.5;">
-          Trả lời vài câu hỏi, AI sẽ hiểu bạn và lên lịch thật hợp lý!
-        </p>
 
-        <div class="planner-mode-selector">
-          <button type="button" id="btnModeForm" class="mode-toggle-btn active">
-            <span>📝</span> Nhập Form
-          </button>
-          <button type="button" id="btnModeDiscovery" class="mode-toggle-btn">
-            <span>🔍</span> AI Gợi ý điểm đến
-          </button>
+        <!-- HERO HEADER -->
+        <div class="planner-hero-header">
+          <div class="planner-hero-breadcrumb">Trang chủ • Lên Lịch Trình</div>
+          <h1 class="planner-form-title">
+            <span>✨</span> Thiết Kế Lịch Trình AI
+          </h1>
+          <p class="planner-hero-sub">Trả lời vài câu hỏi, AI sẽ hiểu bạn và lên lịch thật hợp lý!</p>
         </div>
 
+        <!-- FORM BODY -->
+        <div class="planner-form-body">
 
-        <!-- PATH A: NHẬP FORM (STRUCTURED) -->
-        <div id="stepBasic" class="planner-path-form">
-          <div class="path-header">
-            <div class="path-icon">📝</div>
-            <div>
-              <h3>Lập kế hoạch chi tiết</h3>
-              <p>Cung cấp các thông tin cơ bản để bắt đầu</p>
-            </div>
-          </div>
-          
-          <form id="aiPlannerForm" class="structured-form">
-            <div class="planner-form-group">
-              <label class="planner-form-label">📍 Điểm đến mong muốn</label>
-              <input type="text" id="dest" class="planner-input" placeholder="VD: Đà Lạt, Phú Quốc..." required>
-            </div>
-
-            <div class="form-row">
-              <div class="planner-form-group">
-                <label class="planner-form-label">📆 Số ngày</label>
-                <input type="number" id="days" class="planner-input" placeholder="3" min="1" max="14" required>
-              </div>
-              <div class="planner-form-group">
-                <label class="planner-form-label">📅 Ngày đi</label>
-                <input type="date" id="tripDate" class="planner-input">
-              </div>
-            </div>
-
-            <div class="planner-form-group">
-              <label class="planner-form-label">💰 Ngân sách dự kiến</label>
-              <select id="budget" class="planner-input">
-                <option value="dưới 1 triệu VNĐ">Dưới 1M VNĐ (Phượt bụi)</option>
-                <option value="1 đến 3 triệu VNĐ">1M - 3M VNĐ (Tiết kiệm)</option>
-                <option value="3 đến 7 triệu VNĐ" selected>3M - 7M VNĐ (Tiêu chuẩn)</option>
-                <option value="7 đến 15 triệu VNĐ">7M - 15M VNĐ (Thương gia)</option>
-                <option value="Không quan tâm">Tùy AI đề xuất</option>
-              </select>
-            </div>
-
-            <div class="planner-form-group">
-              <label class="planner-form-label">👥 Thành viên</label>
-              <select id="companion" class="planner-input">
-                <option value="Một mình">Solo (Một mình)</option>
-                <option value="Cặp đôi">Cặp đôi / Trăng mật</option>
-                <option value="Gia đình">Gia đình / Người thân</option>
-                <option value="Bạn bè" selected>Nhóm bạn thân</option>
-              </select>
-            </div>
-
-            <div class="planner-form-group">
-              <label class="planner-form-label" style="display: flex; justify-content: space-between; align-items: center;">
-                <span>💡 Câu hỏi / Yêu cầu thêm</span>
-                <button type="button" id="btnAISuggestQuestion" class="btn-tiny-ai">✨ AI Gợi ý</button>
-              </label>
-              <textarea id="additionalInfo" class="planner-input" placeholder="VD: Tôi muốn leo núi và ăn tối lãng mạn..." rows="2"></textarea>
-            </div>
-
-            <button type="submit" class="planner-btn main-action">
-              <span>Tiếp tục — AI sẽ hỏi thêm</span>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          <div class="planner-mode-selector">
+            <button type="button" id="btnModeForm" class="mode-toggle-btn active">
+              <span>📝</span> Nhập Form
             </button>
-          </form>
-        </div>
+            <button type="button" id="btnModeDiscovery" class="mode-toggle-btn">
+              <span>🔍</span> Gợi ý điểm đến
+            </button>
+            <button type="button" id="btnModeCompare" class="mode-toggle-btn">
+              <span>⚖️</span> So sánh
+            </button>
+          </div>
 
-        <!-- PATH B: AI DISCOVERY (CHAT CONSOLE) -->
-        <div id="stepDiscovery" class="planner-path-discovery" style="display:none;">
-          <div class="discovery-console">
-            <div class="console-header">
-              <div class="console-status"><span class="status-dot"></span> AI Đang Trực Tuyến</div>
-              <h3>WanderAI Assistant</h3>
-              <p>Trò chuyện để tìm cảm hứng điểm đến</p>
-            </div>
-            
-            <div id="discoveryMessages" class="console-messages"></div>
-            
-            <div class="console-input-area">
-              <div id="discoveryChips" class="console-chips"></div>
-              <form id="discoveryForm" class="console-form">
-                <input type="text" id="discoveryInput" placeholder="VD: 5 triệu đi đâu mát mẻ?" autocomplete="off">
-                <button type="submit">Hỏi AI</button>
-              </form>
+          <!-- PATH A: NHẬP FORM (STRUCTURED) -->
+          <div id="stepBasic" class="planner-path-form">
+
+            <!-- VÙNG MIỀN - Region Selector Cards giống ảnh tham khảo -->
+            <div class="planner-region-section">
+              <div class="planner-region-label">📍 Chọn vùng du lịch</div>
+              <div class="region-cards-grid" id="regionCards">
+                <div class="region-card active" data-region="Miền Bắc" onclick="selectRegion(this)">
+                  <span class="region-card-icon">🏔️</span>
+                  <span class="region-card-name">Miền Bắc</span>
+                  <span class="region-card-sub">Hà Nội, Hạ Long, Sapa</span>
+                </div>
+                <div class="region-card" data-region="Miền Trung" onclick="selectRegion(this)">
+                  <span class="region-card-icon">🌊</span>
+                  <span class="region-card-name">Miền Trung</span>
+                  <span class="region-card-sub">Huế, Hội An, Đà Nẵng</span>
+                </div>
+                <div class="region-card" data-region="Miền Nam" onclick="selectRegion(this)">
+                  <span class="region-card-icon">🏙️</span>
+                  <span class="region-card-name">Miền Nam</span>
+                  <span class="region-card-sub">TP.HCM, Phú Quốc</span>
+                </div>
+              </div>
             </div>
 
-            <div id="discoveryActionBox" class="console-action-box" style="display:none;">
-              <p>Bạn đã chọn được điểm đến?</p>
-              <button id="btnAcceptDiscovery" class="btn-confirm-discovery">
-                ✅ Đồng ý điểm đến này
+            <!-- ĐIỂM ĐẾN TRONG VÙNG - hiện ra khi click vùng -->
+            <div id="regionDestinations" class="region-dest-panel" style="display:none;">
+              <div class="region-dest-header">
+                <div class="region-dest-label">🗺️ <span id="regionDestLabel">Chọn điểm đến</span> <small style="text-transform:none; font-weight:400; color:var(--text-muted); margin-left:0.5rem">(Vuốt ngang để chọn)</small></div>
+                <button type="button" id="btnRefreshDest" class="btn-refresh-dest" onclick="refreshDestinations()">
+                  <span>🔄 Ngẫu nhiên</span>
+                </button>
+              </div>
+              <div id="regionDestCards" class="region-dest-scroll"></div>
+            </div>
+
+            <!-- PHONG CÁCH DU LỊCH -->
+            <div class="planner-section-label">🎭 Phong cách bạn muốn?</div>
+            <div class="travel-styles-grid">
+              <div class="style-chip" onclick="toggleStyle(this)" data-style="Nghỉ dưỡng">
+                <span class="style-icon">🏖️</span> Nghỉ dưỡng
+              </div>
+              <div class="style-chip" onclick="toggleStyle(this)" data-style="Khám phá">
+                <span class="style-icon">⛰️</span> Khám phá
+              </div>
+              <div class="style-chip active" onclick="toggleStyle(this)" data-style="Ẩm thực">
+                <span class="style-icon">🍜</span> Ẩm thực
+              </div>
+              <div class="style-chip" onclick="toggleStyle(this)" data-style="Văn hóa">
+                <span class="style-icon">⛩️</span> Văn hóa
+              </div>
+              <div class="style-chip" onclick="toggleStyle(this)" data-style="Mua sắm">
+                <span class="style-icon">🛍️</span> Mua sắm
+              </div>
+            </div>
+
+            <div class="planner-section-divider"></div>
+
+            <form id="aiPlannerForm" class="structured-form">
+
+              <div class="planner-field-group">
+                <label class="planner-field-label">📍 Điểm đến mong muốn</label>
+                <input type="text" id="dest" class="planner-input" placeholder="VD: Đà Lạt, Phú Quốc..." required>
+              </div>
+
+              <!-- NGÀY ĐI & SỐ NGÀY - giống ảnh tham khảo, dạng row -->
+              <div class="planner-dates-row">
+                <div class="planner-field-group" style="margin-bottom:0">
+                  <label class="planner-field-label">📅 Ngày khởi hành</label>
+                  <input type="date" id="tripDate" class="planner-input">
+                </div>
+                <div class="planner-field-group" style="margin-bottom:0">
+                  <label class="planner-field-label">📆 Số ngày</label>
+                  <input type="number" id="days" class="planner-input" placeholder="3" min="1" max="14" required>
+                </div>
+              </div>
+
+              <div class="planner-dates-row">
+                <div class="planner-field-group">
+                  <label class="planner-field-label">🌍 Quốc tịch</label>
+                  <select id="nationality" class="planner-input">
+                    <option value="Việt Nam" selected>🇻🇳 Việt Nam</option>
+                    <option value="Âu Mỹ">🇺🇸 Âu Mỹ</option>
+                    <option value="Hàn Quốc">🇰🇷 Hàn Quốc</option>
+                    <option value="Nhật Bản">🇯🇵 Nhật Bản</option>
+                    <option value="Trung Quốc">🇨🇳 Trung Quốc</option>
+                    <option value="Đông Nam Á">🌏 Đông Nam Á</option>
+                  </select>
+                </div>
+                <div class="planner-field-group">
+                  <label class="planner-field-label">👥 Thành viên</label>
+                  <select id="companion" class="planner-input">
+                    <option value="Một mình">Solo (Một mình)</option>
+                    <option value="Cặp đôi">Cặp đôi</option>
+                    <option value="Gia đình">Gia đình</option>
+                    <option value="Bạn bè" selected>Nhóm bạn thân</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="planner-dates-row">
+                <div class="planner-field-group">
+                  <label class="planner-field-label">💰 Ngân sách</label>
+                  <select id="budget" class="planner-input">
+                    <option value="dưới 1 triệu VNĐ">Dưới 1M (Phượt)</option>
+                    <option value="1 đến 3 triệu VNĐ">1M - 3M (Tiết kiệm)</option>
+                    <option value="3 đến 7 triệu VNĐ" selected>3M - 7M (Tiêu chuẩn)</option>
+                    <option value="7 đến 15 triệu VNĐ">7M - 15M (Thương gia)</option>
+                  </select>
+                </div>
+                <div class="planner-field-group">
+                  <label class="planner-field-label">📅 Số lượng</label>
+                  <select id="optionCount" class="planner-input" style="display:none;">
+                    <option value="1" selected>1 Lịch trình</option>
+                  </select>
+                  <div class="planner-input-readonly" style="padding: 0.75rem; background: rgba(255,255,255,0.05); border-radius: 0.5rem; color: var(--text-muted); font-size: 0.9rem;">
+                     <span>✨ Luôn tạo lịch trình tối ưu nhất</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="planner-field-group" style="margin-top: 1rem;">
+                <label class="planner-field-label" style="display: flex; justify-content: space-between; align-items: center;">
+                  <span>💡 Yêu cầu thêm</span>
+                  <button type="button" id="btnAISuggestQuestion" class="btn-tiny-ai">✨ AI Gợi ý</button>
+                </label>
+                <textarea id="additionalInfo" class="planner-input" placeholder="VD: Muốn leo núi, ăn lãng mạn..." rows="2" style="height: 60px; resize: none;"></textarea>
+              </div>
+
+              <button type="submit" class="planner-btn main-action">
+                <span>Tiếp tục — AI sẽ hỏi thêm</span>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
               </button>
-            </div>
-          </div>
-        </div>
-
-        <!-- STEP 2: SMART WIZARD (FOLLOW UP) -->
-        <div id="stepSmartWizard" class="planner-path-wizard" style="display:none;">
-          <div class="wizard-header">
-            <div class="wizard-step-info">Bước 2: Tối ưu lịch trình</div>
-            <h3>✨ Hoàn thiện chi tiết</h3>
-          </div>
-          <div id="smartChatArea" class="wizard-messages"></div>
-          <div id="smartOptionsArea" class="wizard-options"></div>
-          
-          <div id="smartInputArea" class="wizard-input-row">
-            <form id="smartChatForm">
-              <input type="text" id="smartChatInput" placeholder="Nhập câu trả lời..." autocomplete="off">
-              <button type="submit">Gửi</button>
             </form>
           </div>
 
-          <div id="smartConfirmationArea" class="wizard-confirmation" style="display:none;">
-            <div id="detectedDataSummary" class="summary-box"></div>
-            <button id="btnFinalGenerate" class="planner-btn final-action">
-              🚀 Lên lịch trình ngay!
-            </button>
+          <!-- PATH B: AI DISCOVERY (CHAT CONSOLE) -->
+          <div id="stepDiscovery" class="planner-path-discovery" style="display:none;">
+            <div class="discovery-console">
+              <div class="console-header">
+                <div class="console-status"><span class="status-dot"></span> AI Đang Trực Tuyến</div>
+                <h3>WanderAI Assistant</h3>
+                <p>Trò chuyện để tìm cảm hứng điểm đến</p>
+              </div>
+              
+              <div id="discoveryMessages" class="console-messages"></div>
+              
+              <div class="console-input-area">
+                <div id="discoveryChips" class="console-chips"></div>
+                <form id="discoveryForm" class="console-form">
+                  <input type="text" id="discoveryInput" placeholder="VD: 5 triệu đi đâu mát mẻ?" autocomplete="off">
+                  <button type="submit">Hỏi AI</button>
+                </form>
+              </div>
+
+              <div id="discoveryActionBox" class="console-action-box" style="display:none;">
+                <p>Bạn đã chọn được điểm đến?</p>
+                <button id="btnAcceptDiscovery" class="btn-confirm-discovery">
+                  ✅ Đồng ý điểm đến này
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
+
+          <!-- STEP 2: SMART WIZARD (FOLLOW UP) -->
+          <div id="stepSmartWizard" class="planner-path-wizard" style="display:none;">
+            <div class="wizard-header">
+              <div class="wizard-step-info">Bước 2: Tối ưu lịch trình</div>
+              <h3>✨ Hoàn thiện chi tiết</h3>
+            </div>
+            <div id="smartChatArea" class="wizard-messages"></div>
+            <div id="smartOptionsArea" class="wizard-options"></div>
+            
+            <div id="smartInputArea" class="wizard-input-row">
+              <form id="smartChatForm">
+                <input type="text" id="smartChatInput" placeholder="Nhập câu trả lời..." autocomplete="off">
+                <button type="submit">Gửi</button>
+              </form>
+            </div>
+
+            <div id="smartConfirmationArea" class="wizard-confirmation" style="display:none;">
+              <div id="detectedDataSummary" class="summary-box"></div>
+              <button id="btnFinalGenerate" class="planner-btn final-action">
+                🚀 Lên lịch trình ngay!
+              </button>
+            </div>
+          </div>
+
+          <!-- STEP 3: COMPARISON LIBRARY (NEW PATH) -->
+          <div id="stepCompare" class="planner-path-compare" style="display:none; flex-direction:column; height: 100%;">
+            <div class="compare-library-header" style="padding: 1.5rem; background: var(--bg-elevated); border-radius: 1rem; margin-bottom: 1rem;">
+              <div class="wizard-step-info" style="color:var(--accent); font-weight:700; margin-bottom:0.5rem;">Thư viện đối chiếu</div>
+              <h3 style="margin:0; font-size:1.5rem;">⚖️ So sánh lịch trình</h3>
+              <p style="color:var(--text-muted); font-size:0.9rem; margin-top:0.5rem;">Chọn một lịch trình đã lưu để đối chiếu với bản hiện tại</p>
+            </div>
+            
+            <div id="savedTripsList" class="saved-trips-list-v2" style="flex:1; overflow-y:auto; padding:0.5rem;">
+              <!-- List will be rendered here -->
+            </div>
+            
+            <div class="compare-help-note" style="padding:1rem; background:rgba(59,130,246,0.05); border-radius:0.75rem; margin-top:1rem; font-size:0.85rem; color:var(--text-muted);">
+              <p>✨ Bạn có thể so sánh bản hiện tại với bất kỳ bản lưu nào trong quá khứ.</p>
+            </div>
+          </div>
+
+        </div><!-- end .planner-form-body -->
       </aside>
 
 
@@ -284,5 +385,557 @@
   <script src="chat-brain.js"></script>
   <script src="main.js?v=1777307000000" defer></script>
   <script src="planner.js?v=1777335000010"></script>
+  <script>
+    const REGION_DESTINATIONS = {
+      'Miền Bắc': [
+        { name: 'Hà Nội', img: 'https://images.unsplash.com/photo-1555944411-9a258e7a2b0a?w=200&h=150&fit=crop' },
+        { name: 'Hạ Long', img: 'https://images.unsplash.com/photo-1524231757912-21f4fe3a7200?w=200&h=150&fit=crop' },
+        { name: 'Sapa', img: 'https://images.unsplash.com/photo-1508809159021-4171206013a2?w=200&h=150&fit=crop' },
+        { name: 'Ninh Bình', img: 'https://images.unsplash.com/photo-1599708153386-62e26066265e?w=200&h=150&fit=crop' },
+        { name: 'Hà Giang', img: 'https://images.unsplash.com/photo-1581691101914-df07ba063852?w=200&h=150&fit=crop' },
+        { name: 'Mộc Châu', img: 'https://images.unsplash.com/photo-1623863484089-9e8c4f03943d?w=200&h=150&fit=crop' },
+        { name: 'Cao Bằng', img: 'https://images.unsplash.com/photo-1563812739347-1906a5996055?w=200&h=150&fit=crop' },
+        { name: 'Mai Châu', img: 'https://images.unsplash.com/photo-1589146162335-c340b498425d?w=200&h=150&fit=crop' },
+        { name: 'Tam Đảo', img: 'https://images.unsplash.com/photo-1594910403541-610116e09c85?w=200&h=150&fit=crop' },
+        { name: 'Ba Vì', img: 'https://images.unsplash.com/photo-1616853215286-353d9154a1d8?w=200&h=150&fit=crop' },
+        { name: 'Cát Bà', img: 'https://images.unsplash.com/photo-1528127269322-539801943592?w=200&h=150&fit=crop' },
+        { name: 'Yên Bái', img: 'https://images.unsplash.com/photo-1581177653526-70e28f309e3e?w=200&h=150&fit=crop' },
+        { name: 'Điện Biên', img: 'https://images.unsplash.com/photo-1506461883276-594a12b11cf3?w=200&h=150&fit=crop' },
+        { name: 'Lạng Sơn', img: 'https://images.unsplash.com/photo-1587588354456-ae376af7182f?w=200&h=150&fit=crop' },
+        { name: 'Bắc Kạn', img: 'https://images.unsplash.com/photo-1596395817260-2440f3131759?w=200&h=150&fit=crop' },
+        { name: 'Tuyên Quang', img: 'https://images.unsplash.com/photo-1596394516093-501ba68a0ba6?w=200&h=150&fit=crop' },
+        { name: 'Thái Nguyên', img: 'https://images.unsplash.com/photo-1590523277543-a94d2e4eb00b?w=200&h=150&fit=crop' },
+        { name: 'Đảo Cô Tô', img: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=200&h=150&fit=crop' },
+        { name: 'Mù Cang Chải', img: 'https://images.unsplash.com/photo-1581691101914-df07ba063852?w=200&h=150&fit=crop' },
+        { name: 'Đồng Văn', img: 'https://images.unsplash.com/photo-1563812739347-1906a5996055?w=200&h=150&fit=crop' },
+        { name: 'Vịnh Lan Hạ', img: 'https://images.unsplash.com/photo-1524231757912-21f4fe3a7200?w=200&h=150&fit=crop' },
+      ],
+      'Miền Trung': [
+        { name: 'Đà Nẵng', img: 'https://images.unsplash.com/photo-1559592443-7f87a030062a?w=200&h=150&fit=crop' },
+        { name: 'Hội An', img: 'https://images.unsplash.com/photo-1587922546307-776227941871?w=200&h=150&fit=crop' },
+        { name: 'Huế', img: 'https://images.unsplash.com/photo-1590054387835-ab72678fef01?w=200&h=150&fit=crop' },
+        { name: 'Nha Trang', img: 'https://images.unsplash.com/photo-1506461883276-594a12b11cf3?w=200&h=150&fit=crop' },
+        { name: 'Đà Lạt', img: 'https://images.unsplash.com/photo-1600100398055-149d56a3151b?w=200&h=150&fit=crop' },
+        { name: 'Quy Nhơn', img: 'https://images.unsplash.com/photo-1586542158380-49272304d9a5?w=200&h=150&fit=crop' },
+        { name: 'Mũi Né', img: 'https://images.unsplash.com/photo-1584981772656-78711422700f?w=200&h=150&fit=crop' },
+        { name: 'Phong Nha', img: 'https://images.unsplash.com/photo-1584305886638-348e3e4e9663?w=200&h=150&fit=crop' },
+        { name: 'Phú Yên', img: 'https://images.unsplash.com/photo-1587588354456-ae376af7182f?w=200&h=150&fit=crop' },
+        { name: 'Bình Ba', img: 'https://images.unsplash.com/photo-1614531341773-3bff8b7cb3fc?w=200&h=150&fit=crop' },
+        { name: 'Tuy Hòa', img: 'https://images.unsplash.com/photo-1583417319070-4a69db38a482?w=200&h=150&fit=crop' },
+        { name: 'Pleiku', img: 'https://images.unsplash.com/photo-1596395817260-2440f3131759?w=200&h=150&fit=crop' },
+        { name: 'Buôn Ma Thuột', img: 'https://images.unsplash.com/photo-1596394516093-501ba68a0ba6?w=200&h=150&fit=crop' },
+        { name: 'Kon Tum', img: 'https://images.unsplash.com/photo-1590523277543-a94d2e4eb00b?w=200&h=150&fit=crop' },
+        { name: 'Lý Sơn', img: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=200&h=150&fit=crop' },
+        { name: 'Phan Thiết', img: 'https://images.unsplash.com/photo-1524231757912-21f4fe3a7200?w=200&h=150&fit=crop' },
+        { name: 'Quảng Trị', img: 'https://images.unsplash.com/photo-1587922546307-776227941871?w=200&h=150&fit=crop' },
+        { name: 'Quảng Ngãi', img: 'https://images.unsplash.com/photo-1559592443-7f87a030062a?w=200&h=150&fit=crop' },
+        { name: 'Bình Thuận', img: 'https://images.unsplash.com/photo-1584981772656-78711422700f?w=200&h=150&fit=crop' },
+        { name: 'Vịnh Vân Phong', img: 'https://images.unsplash.com/photo-1506461883276-594a12b11cf3?w=200&h=150&fit=crop' },
+      ],
+      'Miền Nam': [
+        { name: 'TP.HCM', img: 'https://images.unsplash.com/photo-1583417319070-4a69db38a482?w=200&h=150&fit=crop' },
+        { name: 'Phú Quốc', img: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=200&h=150&fit=crop' },
+        { name: 'Cần Thơ', img: 'https://images.unsplash.com/photo-1571508601936-6ca847b47ae4?w=200&h=150&fit=crop' },
+        { name: 'Vũng Tàu', img: 'https://images.unsplash.com/photo-1596422846543-75c6fc18a594?w=200&h=150&fit=crop' },
+        { name: 'Côn Đảo', img: 'https://images.unsplash.com/photo-1544735724-449ad2bdd335?w=200&h=150&fit=crop' },
+        { name: 'An Giang', img: 'https://images.unsplash.com/photo-1563812739347-1906a5996055?w=200&h=150&fit=crop' },
+        { name: 'Tây Ninh', img: 'https://images.unsplash.com/photo-1596395817260-2440f3131759?w=200&h=150&fit=crop' },
+        { name: 'Bến Tre', img: 'https://images.unsplash.com/photo-1596394516093-501ba68a0ba6?w=200&h=150&fit=crop' },
+        { name: 'Kiên Giang', img: 'https://images.unsplash.com/photo-1590523277543-a94d2e4eb00b?w=200&h=150&fit=crop' },
+        { name: 'Đồng Tháp', img: 'https://images.unsplash.com/photo-1614531341773-3bff8b7cb3fc?w=200&h=150&fit=crop' },
+        { name: 'Mũi Cà Mau', img: 'https://images.unsplash.com/photo-1506461883276-594a12b11cf3?w=200&h=150&fit=crop' },
+        { name: 'Bạc Liêu', img: 'https://images.unsplash.com/photo-1587588354456-ae376af7182f?w=200&h=150&fit=crop' },
+        { name: 'Sóc Trăng', img: 'https://images.unsplash.com/photo-1555944411-9a258e7a2b0a?w=200&h=150&fit=crop' },
+        { name: 'Trà Vinh', img: 'https://images.unsplash.com/photo-1590054387835-ab72678fef01?w=200&h=150&fit=crop' },
+        { name: 'Hậu Giang', img: 'https://images.unsplash.com/photo-1587922546307-776227941871?w=200&h=150&fit=crop' },
+        { name: 'Vĩnh Long', img: 'https://images.unsplash.com/photo-1571508601936-6ca847b47ae4?w=200&h=150&fit=crop' },
+        { name: 'Tiền Giang', img: 'https://images.unsplash.com/photo-1596422846543-75c6fc18a594?w=200&h=150&fit=crop' },
+        { name: 'Đảo Nam Du', img: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=200&h=150&fit=crop' },
+        { name: 'Hòn Sơn', img: 'https://images.unsplash.com/photo-1544735724-449ad2bdd335?w=200&h=150&fit=crop' },
+        { name: 'Châu Đốc', img: 'https://images.unsplash.com/photo-1563812739347-1906a5996055?w=200&h=150&fit=crop' },
+      ]
+    };
+
+    let currentRegion = '';
+    let currentDestIndex = 0;
+    const SHOW_COUNT = 5;
+
+    // Region card selection handler
+    function selectRegion(card) {
+      document.querySelectorAll('.region-card').forEach(c => c.classList.remove('active'));
+      card.classList.add('active');
+      currentRegion = card.dataset.region;
+      currentDestIndex = 0;
+
+      renderDestinations();
+
+      const panel = document.getElementById('regionDestinations');
+      panel.style.display = 'block';
+      panel.style.opacity = '0';
+      panel.style.transform = 'translateY(-8px)';
+      requestAnimationFrame(() => {
+        panel.style.transition = 'all 0.25s ease';
+        panel.style.opacity = '1';
+        panel.style.transform = 'translateY(0)';
+      });
+
+      // Cập nhật placeholder
+      const dest = document.getElementById('dest');
+      if (dest && !dest.value) {
+        const hints = {
+          'Miền Bắc': 'VD: Hà Nội, Hạ Long, Sapa...',
+          'Miền Trung': 'VD: Đà Nẵng, Hội An, Huế...',
+          'Miền Nam': 'VD: TP.HCM, Phú Quốc, Cần Thơ...'
+        };
+        dest.placeholder = hints[currentRegion] || 'VD: Đà Lạt, Phú Quốc...';
+      }
+    }
+
+    function renderDestinations() {
+      const scrollContainer = document.getElementById('regionDestCards');
+      const label = document.getElementById('regionDestLabel');
+      
+      label.textContent = currentRegion;
+      scrollContainer.innerHTML = '';
+
+      const allDest = REGION_DESTINATIONS[currentRegion] || [];
+      // Hiện thị toàn bộ để vuốt
+      allDest.forEach(dest => {
+        const card = document.createElement('div');
+        card.className = 'region-dest-card';
+        card.innerHTML = `
+          <div class="dest-card-image">
+            <img src="${dest.img}" alt="${dest.name}">
+            <div class="dest-card-overlay">
+              <span class="dest-add-icon">+</span>
+            </div>
+          </div>
+          <div class="dest-card-info">
+            <span class="dest-card-name">${dest.name}</span>
+          </div>
+        `;
+        card.onclick = () => selectDestination(dest.name, card);
+        scrollContainer.appendChild(card);
+      });
+    }
+
+    function refreshDestinations() {
+      // Đổi sang chế độ ngẫu nhiên thứ tự (shuffle)
+      const allDest = REGION_DESTINATIONS[currentRegion] || [];
+      allDest.sort(() => Math.random() - 0.5);
+      
+      const scrollContainer = document.getElementById('regionDestCards');
+      scrollContainer.style.opacity = '0';
+      
+      setTimeout(() => {
+        renderDestinations();
+        scrollContainer.scrollLeft = 0; // Về đầu
+        scrollContainer.style.transition = 'all 0.3s ease';
+        scrollContainer.style.opacity = '1';
+      }, 200);
+    }
+
+    // Chọn điểm cụ thể → điền vào ô input
+    function selectDestination(name, cardEl) {
+      document.querySelectorAll('.region-dest-card').forEach(c => c.classList.remove('active'));
+      cardEl.classList.add('active');
+      const dest = document.getElementById('dest');
+      if (dest) {
+        dest.value = name;
+        dest.focus();
+        
+        // Cập nhật text bên khung phải cho "alive"
+        const resultPlaceholder = document.querySelector('.planner-result-placeholder p');
+        if (resultPlaceholder) {
+          resultPlaceholder.innerHTML = `Đang chờ bạn hoàn tất thông tin cho chuyến đi <b>${name}</b>... ✨`;
+        }
+
+        // Highlight hiệu ứng
+        dest.style.borderColor = '#3b82f6';
+        dest.style.boxShadow = '0 0 0 3px rgba(59,130,246,0.2)';
+        setTimeout(() => {
+          dest.style.borderColor = '';
+          dest.style.boxShadow = '';
+        }, 1500);
+      }
+    }
+
+    // Toggle Style Chips
+    function toggleStyle(chip) {
+      chip.classList.toggle('active');
+    }
+
+    // Tab switching (Mode selector)
+    document.querySelectorAll('.mode-toggle-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const resultsContainer = document.getElementById('itineraryResults');
+        const hasResults = resultsContainer.innerHTML.trim() !== "";
+        
+        if (btn.id === 'btnModeCompare') {
+          if (!hasResults) {
+            // Nếu chưa có kết quả, nhảy về Form và bật chế độ 2 phương án
+            document.querySelectorAll('.mode-toggle-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById('btnModeForm').classList.add('active');
+            document.getElementById('optionCount').value = "2";
+            alert("Hãy tạo lịch trình trước khi so sánh nhé! Đã bật chế độ tạo 2 phương án cho bạn.");
+            return;
+          }
+          // Nếu đã có kết quả, hiển thị view So sánh/Phân tích
+          showComparisonView();
+        } else {
+          document.querySelectorAll('.mode-toggle-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          if (btn.id === 'btnModeForm') {
+             document.getElementById('optionCount').value = "1";
+          }
+        }
+      });
+    });
+
+    function showComparisonView(plans, names) {
+      const resultsContainer = document.getElementById('timelineContent');
+      
+      const comparisonCardsHtml = plans.map((plan, idx) => {
+        const name = names[idx] || `Lựa chọn ${idx + 1}`;
+        const accentColor = idx % 2 === 0 ? '#2563eb' : '#d97706';
+        const bgColor = idx % 2 === 0 ? '#f8fafc' : '#fffbeb';
+        const borderColor = idx % 2 === 0 ? '#e2e8f0' : '#fef3c7';
+        
+        return `
+          <div class="compare-card" style="background: ${bgColor}; border: 1px solid ${borderColor}; padding: 1.5rem; border-radius: 1.25rem; flex: 1; min-width: 300px;">
+              <div class="analysis-label" style="color:${accentColor}; font-size: 1.2rem; font-weight: 800; margin-bottom: 1rem; border-bottom: 1px solid ${borderColor}; padding-bottom: 0.5rem;">${name}</div>
+              <div class="criteria-item" style="margin-bottom: 1rem;">
+                <strong style="color: #475569; display: block; font-size: 0.8rem; text-transform: uppercase;">🌟 Điểm nhấn</strong>
+                <p style="margin: 0.25rem 0; font-size: 0.95rem; line-height: 1.4;">${plan?.tripSummary?.substring(0, 100) || 'Hành trình thú vị...'}...</p>
+              </div>
+              <div class="criteria-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-top: 1rem;">
+                <div class="mini-crit">
+                  <span style="display:block; font-size: 0.7rem; color: #94a3b8;">Mật độ khách</span>
+                  <span style="font-weight: 600; color: #1e293b;">${idx % 2 === 0 ? 'Vừa phải' : 'Khá đông'}</span>
+                </div>
+                <div class="mini-crit">
+                  <span style="display:block; font-size: 0.7rem; color: #94a3b8;">Di chuyển</span>
+                  <span style="font-weight: 600; color: #1e293b;">${idx === 0 ? 'Dễ dàng' : 'Trung bình'}</span>
+                </div>
+                <div class="mini-crit">
+                  <span style="display:block; font-size: 0.7rem; color: #94a3b8;">Thời tiết</span>
+                  <span style="font-weight: 600; color: #1e293b;">${idx === 1 ? 'Mưa ít' : 'Lý tưởng'}</span>
+                </div>
+                <div class="mini-crit">
+                  <span style="display:block; font-size: 0.7rem; color: #94a3b8;">Ẩm thực</span>
+                  <span style="font-weight: 600; color: #1e293b;">Đặc sắc</span>
+                </div>
+                <div class="mini-crit" style="grid-column: span 2; border-top: 1px solid rgba(0,0,0,0.05); padding-top: 0.5rem;">
+                  <span style="display:block; font-size: 0.7rem; color: #94a3b8;">Chi phí dự kiến</span>
+                  <span style="font-weight: 700; color: #059669; font-size: 1.1rem;">${plan.estimatedCost || plan.totalEstimatedCost || '5.500.000'} VNĐ</span>
+                </div>
+              </div>
+          </div>
+        `;
+      }).join('');
+
+      const analysisHtml = `
+        <div class="comparison-summary-card" style="grid-column: 1 / -1; margin-bottom: 2rem; background: #ffffff; color: #1e293b;">
+          <div class="compare-card-title" style="color: #0f172a; border-bottom: 2px solid #f1f5f9; padding-bottom: 1rem;">⚖️ Bảng So Sánh & Đánh Giá Tổng Hợp</div>
+          
+          <div class="comparison-container" style="display: flex; flex-wrap: wrap; gap: 1.5rem; margin-top: 1.5rem;">
+            ${comparisonCardsHtml}
+          </div>
+
+          <div class="compare-conclusion" style="margin-top: 2rem; padding: 1.5rem; background: #f0fdf4; border-radius: 1rem; border: 1px solid #dcfce7;">
+             <h4 style="margin: 0 0 1rem 0; color: #166534; display: flex; align-items: center; gap: 0.5rem;">✨ Kết luận từ WanderAI</h4>
+             <p style="margin: 0 0 1.5rem 0; font-size: 1rem; color: #14532d; line-height: 1.5;">
+               Dựa trên ${plans.length} lựa chọn trên, nếu bạn ưu tiên <strong>ngân sách</strong> hãy chọn <strong>${names[0]}</strong>. 
+               Để có <strong>trải nghiệm đa dạng nhất</strong>, <strong>${names[plans.length-1]}</strong> là lựa chọn không thể bỏ qua.
+             </p>
+
+             <!-- Bảng phần trăm phù hợp (N-Bản) -->
+             <div class="percentage-score-table" style="background: white; border-radius: 0.75rem; padding: 1.5rem; border: 1px solid #dcfce7;">
+                <div style="font-weight: 800; font-size: 0.9rem; color: #166534; margin-bottom: 1.5rem; text-transform: uppercase; letter-spacing: 1px;">📊 Chỉ số phù hợp (%)</div>
+                
+                <div class="score-row" style="display: flex; flex-direction: column; gap: 1.5rem;">
+                  <!-- Tiêu chí 1: Ngân sách -->
+                  <div class="score-item">
+                    <div style="font-weight: 700; font-size: 0.85rem; margin-bottom: 0.75rem; color: #1e293b;">Tối ưu ngân sách</div>
+                    ${plans.map((p, i) => {
+                      const score = 95 - (i * 5); // Dummy calculation
+                      return `
+                        <div style="margin-bottom: 0.5rem;">
+                          <div style="display: flex; justify-content: space-between; font-size: 0.75rem; margin-bottom: 0.2rem;">
+                            <span>${names[i]}</span>
+                            <span>${score}%</span>
+                          </div>
+                          <div style="height: 6px; background: #f1f5f9; border-radius: 3px; overflow: hidden;">
+                            <div style="width: ${score}%; background: #22c55e;"></div>
+                          </div>
+                        </div>
+                      `;
+                    }).join('')}
+                  </div>
+
+                  <!-- Tiêu chí 2: Văn hóa -->
+                  <div class="score-item">
+                    <div style="font-weight: 700; font-size: 0.85rem; margin-bottom: 0.75rem; color: #1e293b;">Trải nghiệm văn hóa</div>
+                    ${plans.map((p, i) => {
+                      const score = 70 + (i * 8); 
+                      return `
+                        <div style="margin-bottom: 0.5rem;">
+                          <div style="display: flex; justify-content: space-between; font-size: 0.75rem; margin-bottom: 0.2rem;">
+                            <span>${names[i]}</span>
+                            <span>${score}%</span>
+                          </div>
+                          <div style="height: 6px; background: #f1f5f9; border-radius: 3px; overflow: hidden;">
+                            <div style="width: ${score}%; background: #3b82f6;"></div>
+                          </div>
+                        </div>
+                      `;
+                    }).join('')}
+                  </div>
+
+                  <!-- Tiêu chí 3: Nghỉ dưỡng -->
+                  <div class="score-item">
+                    <div style="font-weight: 700; font-size: 0.85rem; margin-bottom: 0.75rem; color: #1e293b;">Mức độ nghỉ dưỡng & Thư giãn</div>
+                    ${plans.map((p, i) => {
+                      const score = 80 - (i * 4); 
+                      return `
+                        <div style="margin-bottom: 0.5rem;">
+                          <div style="display: flex; justify-content: space-between; font-size: 0.75rem; margin-bottom: 0.2rem;">
+                            <span>${names[i]}</span>
+                            <span>${score}%</span>
+                          </div>
+                          <div style="height: 6px; background: #f1f5f9; border-radius: 3px; overflow: hidden;">
+                            <div style="width: ${score}%; background: #8b5cf6;"></div>
+                          </div>
+                        </div>
+                      `;
+                    }).join('')}
+                  </div>
+
+                  <!-- Tiêu chí 4: Giải trí -->
+                  <div class="score-item">
+                    <div style="font-weight: 700; font-size: 0.85rem; margin-bottom: 0.75rem; color: #1e293b;">Hoạt động giải trí & Vui chơi</div>
+                    ${plans.map((p, i) => {
+                      const score = 65 + (i * 10); 
+                      return `
+                        <div style="margin-bottom: 0.5rem;">
+                          <div style="display: flex; justify-content: space-between; font-size: 0.75rem; margin-bottom: 0.2rem;">
+                            <span>${names[i]}</span>
+                            <span>${score > 100 ? 100 : score}%</span>
+                          </div>
+                          <div style="height: 6px; background: #f1f5f9; border-radius: 3px; overflow: hidden;">
+                            <div style="width: ${score > 100 ? 100 : score}%; background: #ec4899;"></div>
+                          </div>
+                        </div>
+                      `;
+                    }).join('')}
+                  </div>
+                </div>
+             </div>
+          </div>
+        </div>
+      `;
+      
+      const oldCard = document.querySelector('.comparison-summary-card');
+      if (oldCard) oldCard.remove();
+      
+      resultsContainer.insertAdjacentHTML('afterbegin', analysisHtml);
+      resultsContainer.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    // Comparison Mode Navigation - Now handled by planner.js
+
+    window.loadSavedTripsForComparison = async function() {
+      const list = document.getElementById('savedTripsList');
+      if (!list) return;
+      list.innerHTML = '<div class="loading-spinner-small"></div>';
+      
+      try {
+        const token = localStorage.getItem('wander_token');
+        if (!token) {
+          list.innerHTML = `
+            <div class="auth-required-box">
+              <p>Vui lòng đăng nhập để xem các lịch trình đã lưu.</p>
+              <a href="/login.html" class="btn-login-small">Đăng nhập ngay</a>
+            </div>
+          `;
+          return;
+        }
+        
+        const res = await fetch('/api/planner/my-trips', {
+          headers: { 'x-auth-token': token }
+        });
+        const json = await res.json();
+        
+        if (json.success && json.data.length > 0) {
+          list.innerHTML = json.data.map(trip => `
+            <div class="saved-trip-item-v2" onclick="toggleTripSelection(this, '${trip._id}')">
+              <div class="trip-selection-check">
+                <input type="checkbox" id="check_${trip._id}" class="trip-checkbox">
+              </div>
+              <div class="trip-info">
+                <strong>📍 ${trip.destination}</strong>
+                <p>${trip.days} ngày - ${new Date(trip.createdAt).toLocaleDateString('vi-VN')}</p>
+              </div>
+            </div>
+          `).join('');
+          
+          // Thêm nút kích hoạt so sánh ở dưới cùng danh sách
+          list.insertAdjacentHTML('beforeend', `
+            <div id="compareActionArea" style="margin-top: 1.5rem; display: none;">
+              <button id="btnStartMultiCompare" class="planner-btn" style="background: var(--accent);">
+                🚀 So sánh các mục đã chọn
+              </button>
+            </div>
+          `);
+          
+          document.getElementById('btnStartMultiCompare').onclick = startMultiCompare;
+        } else {
+          list.innerHTML = '<p style="color:var(--text-muted); text-align:center; padding:2rem;">Bạn chưa có lịch trình nào đã lưu.</p>';
+        }
+      } catch (e) {
+        list.innerHTML = '<p style="color:#f43f5e; text-align:center; padding:2rem;">Không thể tải danh sách.</p>';
+      }
+    }
+
+    let selectedTripIds = [];
+
+    window.toggleTripSelection = function(el, id) {
+      const checkbox = el.querySelector('.trip-checkbox');
+      if (selectedTripIds.includes(id)) {
+        selectedTripIds = selectedTripIds.filter(i => i !== id);
+        el.classList.remove('selected-for-compare');
+        if (checkbox) checkbox.checked = false;
+      } else {
+        selectedTripIds.push(id);
+        el.classList.add('selected-for-compare');
+        if (checkbox) checkbox.checked = true;
+      }
+      
+      const actionArea = document.getElementById('compareActionArea');
+      if (selectedTripIds.length > 0) {
+        actionArea.style.display = 'block';
+      } else {
+        actionArea.style.display = 'none';
+      }
+    };
+
+    async function startMultiCompare() {
+       if (selectedTripIds.length === 0) return;
+       
+       const loader = document.getElementById('aiLoader');
+       const resultContainer = document.getElementById('timelineResult');
+       const placeholder = document.getElementById('resultPlaceholder');
+       
+       if (loader) loader.style.display = 'flex';
+       
+        try {
+         const token = localStorage.getItem('wander_token');
+         const history = window.WanderPlanner.getPlanHistory() || [];
+         const currentIndex = window.WanderPlanner.getCurrentPlanIndex();
+         const currentPlan = history[currentIndex] || null;
+         
+         const plansToCompare = [];
+         const planNames = [];
+         
+         // Lấy dữ liệu cho từng ID đã chọn
+         for (const id of selectedTripIds) {
+           const res = await fetch(`/api/planner/itinerary/${id}`, {
+             headers: { 'x-auth-token': token || '' }
+           });
+           const json = await res.json();
+           if (json.success) {
+             plansToCompare.push(json.data.planJson);
+             planNames.push(json.data.destination);
+           }
+         }
+         
+         const wizardData = window.WanderPlanner.getWizardData() || {};
+         const currentDest = wizardData.destination || 'Bản hiện tại';
+         
+         // Nếu có bản hiện tại, đưa vào danh sách so sánh luôn
+         if (currentPlan) {
+            plansToCompare.unshift(currentPlan);
+            planNames.unshift(currentDest);
+         }
+
+         if (plansToCompare.length > 1) {
+           window.WanderPlanner.renderMultiItinerary(plansToCompare, planNames);
+           setTimeout(() => { if (typeof showComparisonView === 'function') showComparisonView(plansToCompare, planNames); }, 500);
+         } else if (plansToCompare.length === 1) {
+            window.WanderPlanner.renderItinerary(plansToCompare[0], planNames[0], 3);
+         }
+         
+         // Ẩn các nút không cần thiết trong chế độ so sánh lịch trình cũ
+         const saveBtn = document.getElementById('btnSaveTrip');
+         if (saveBtn) saveBtn.style.display = 'none';
+         
+         // Thêm class để ẩn chi tiết hoạt động (chỉ hiện đánh giá tổng quan)
+         const container = document.getElementById('timelineContent');
+         if (container) container.classList.add('comparison-mode-active');
+         
+         // Hiện vùng kết quả
+         if (placeholder) placeholder.style.display = 'none';
+         if (resultContainer) resultContainer.style.display = 'block';
+
+         document.getElementById('itineraryResults')?.scrollIntoView({ behavior: 'smooth' });
+         
+       } catch (e) {
+         console.error("Multi-Compare Error:", e);
+         if (window.WanderToast) WanderToast.error("Không thể thực hiện so sánh.");
+       } finally {
+         if (loader) loader.style.display = 'none';
+       }
+    }
+
+    window.compareWithSavedTrip = async function(id) {
+       // Function cũ, giữ lại để tương thích nếu cần
+    };
+
+    btnModeCompare?.addEventListener('click', () => {
+      openTripPicker();
+    });
+
+    window.WanderPlanner.triggerComparison = async function(savedTripId) {
+       const loader = document.getElementById('aiLoader');
+       if (loader) loader.style.display = 'flex';
+       
+       try {
+         const token = localStorage.getItem('wander_token');
+         const res = await fetch(`/api/planner/itinerary/${savedTripId}`, {
+           headers: { 'x-auth-token': token || '' }
+         });
+         const json = await res.json();
+         
+         if (json.success && json.data) {
+           const savedPlan = json.data.planJson;
+           window.WanderPlanner.renderItinerary = (p, dst, d, dt) => renderItinerary(p, dst, d, dt);
+           window.WanderPlanner.renderMultiItinerary = (ps, dsts) => renderMultiItinerary(ps, dsts);
+           const history = window.WanderPlanner.getPlanHistory() || [];
+           const currentIndex = window.WanderPlanner.getCurrentPlanIndex();
+           const currentPlan = history[currentIndex] || null;
+           
+           if (!currentPlan) {
+             // Nếu chưa có lịch trình hiện tại, chỉ render 1 bản đã lưu nhưng vẫn ở mode dual chuẩn bị
+             renderItinerary(savedPlan, json.data.destination, json.data.days);
+             if (window.WanderToast) WanderToast.info("Đã tải lịch trình đã lưu. Hãy tạo thêm một bản để so sánh!");
+           } else {
+             // Render 2 bản: Hiện tại và Đã lưu
+             renderDualItinerary(currentPlan, savedPlan, SmartWizard.data.destination || 'Chuyến đi', SmartWizard.data.days || 3);
+             
+             // Tự động phân tích
+             setTimeout(() => {
+               if (typeof showComparisonView === 'function') showComparisonView();
+             }, 500);
+           }
+           
+           document.getElementById('itineraryResults')?.scrollIntoView({ behavior: 'smooth' });
+         }
+       } catch (e) {
+         console.error("Comparison Error:", e);
+       } finally {
+         if (loader) loader.style.display = 'none';
+       }
+    };
+  </script>
 </body>
 </html>

@@ -504,11 +504,15 @@
     el.classList.toggle("is-error", !ok && !!text);
     el.classList.toggle("is-ok", !!ok && !!text);
   }
+  var isSubmitting = false;
   var loginForm = document.querySelector('[data-auth-panel="login"]');
   if (loginForm) {
     loginForm.addEventListener("submit", function (e) {
       e.preventDefault();
+      if (isSubmitting) return;
+      
       var btn = loginForm.querySelector('button[type="submit"]');
+      isSubmitting = true;
       WanderUI.setButtonLoading(btn, true);
       var fd = new FormData(loginForm);
       var email = String(fd.get("email") || "").trim().toLowerCase();
@@ -545,6 +549,7 @@
       }).catch(function (err) {
         showAuthMsg(msg, "Lỗi kết nối máy chủ.", false);
       }).finally(function () {
+        isSubmitting = false;
         WanderUI.setButtonLoading(btn, false);
       });
     });
@@ -553,7 +558,10 @@
   if (regForm) {
     regForm.addEventListener("submit", function (e) {
       e.preventDefault();
+      if (isSubmitting) return;
+
       var btn = regForm.querySelector('button[type="submit"]');
+      isSubmitting = true;
       WanderUI.setButtonLoading(btn, true);
       var fd = new FormData(regForm);
       var name = String(fd.get("name") || "").trim();
@@ -1027,31 +1035,35 @@
   function renderDestCards() {
     if (!destGrid) return;
     try {
-      destGrid.innerHTML = "";
       if (PLACES.length === 0) {
         destGrid.innerHTML = '<p class="section-desc">Không có dữ liệu điểm đến.</p>';
         return;
       }
+      
+      var fragment = document.createDocumentFragment();
+      var q = searchInput ? searchInput.value.trim() : "";
+      
       PLACES.forEach(function (p) {
         var tags = (p.tags || []).join(" ");
         var art = document.createElement("article");
         art.className = "dest-card";
         art.setAttribute("data-tags", tags);
         art.setAttribute("data-place-id", p.id);
+        
+        // Basic initial visibility check
+        var matchesFilter = (currentFilter === "all" || tags.toLowerCase().indexOf(currentFilter.toLowerCase()) !== -1);
+        var matchesSearch = (!q || normalize(p.name + " " + p.region + " " + p.text).indexOf(normalize(q)) !== -1);
+        if (!matchesFilter || !matchesSearch) art.classList.add("is-hidden");
+
         var topBadge = p.top ? '<span class="dest-badge">Top</span>' : "";
         var verifiedBadge = p.verified ? '<div class="verified-badge"><span class="icon">🛡️</span> Verified</div>' : '';
         var wOn = wishIsOn(p.id) ? " is-on" : "";
-        var displayImg = p.images && p.images.length > 0 ? p.images[0] : p.image;
+        var displayImg = (p.images && p.images.length > 0) ? p.images[0] : (p.image || "");
         var favCount = parseInt(p.favoritesCount) || 0;
-        if (wishIsOn(p.id) && favCount === 0) favCount = 1; // Đảm bảo hiện ít nhất 1 nếu đã lưu
-        
-        var wishHtml = '<button type="button" class="btn btn--ghost btn--small dest-wish' + wOn + '" data-wish="' + escapeAttr(p.id) + '">' + 
-                       (wishIsOn(p.id) ? '♥ Đã lưu' : '♡ Yêu thích') + 
-                       (favCount > 0 ? ' <span class="wish-count">' + favCount + '</span>' : '') + 
-                       '</button>';
-        
+        if (wishIsOn(p.id) && favCount === 0) favCount = 1;
+
         art.innerHTML = '<div class="dest-card-media">' + 
-                          '<img src="' + (displayImg || '') + '" loading="lazy" alt="' + escapeAttr(p.name || '') + '" class="dest-card-img" />' +
+                          '<img src="' + displayImg + '" loading="lazy" alt="' + escapeAttr(p.name || '') + '" class="dest-card-img" />' +
                           topBadge + verifiedBadge + 
                         '</div>' +
                        '<div class="dest-card-body">' +
@@ -1063,9 +1075,12 @@
                            '<button type="button" class="btn btn--primary btn--small btn-add-trip" data-add-stop-id="' + escapeAttr(p.id) + '"><span>+</span> Chuyến đi</button>' +
                          '</div>' +
                        '</div>';
-        destGrid.appendChild(art);
+        fragment.appendChild(art);
       });
-      // Re-apply filters if any
+
+      destGrid.innerHTML = "";
+      destGrid.appendChild(fragment);
+      
       if (typeof applyDestFilters === 'function') applyDestFilters();
     } catch (err) {
       console.error('Error in renderDestCards:', err);

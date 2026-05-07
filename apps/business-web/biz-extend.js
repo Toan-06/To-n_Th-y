@@ -9,16 +9,33 @@
            sessionStorage.getItem('biz_auth_token') ||
            localStorage.getItem('wander_business_token') || 
            sessionStorage.getItem('wander_business_token') ||
+           localStorage.getItem('biz_token') ||
+           sessionStorage.getItem('biz_token') ||
            localStorage.getItem('wander_token'); 
   }
 
   var API = window.location.origin;
 
-  function apiFetch(url, options) {
+  async function apiFetch(url, options) {
+    if (window.api && typeof window.api.get === 'function') {
+      try {
+        var method = (options && options.method || 'GET').toLowerCase();
+        var config = { headers: (options && options.headers) || {} };
+        if (method === 'get') return await window.api.get(url, config);
+        if (method === 'post') return await window.api.post(url, options.body ? (typeof options.body === 'string' ? JSON.parse(options.body) : options.body) : {}, config);
+        if (method === 'put') return await window.api.put(url, options.body ? (typeof options.body === 'string' ? JSON.parse(options.body) : options.body) : {}, config);
+        if (method === 'delete') return await window.api.delete(url, config);
+      } catch (err) {
+        console.warn('[apiFetch Extension] Fallback to local due to:', err.message);
+      }
+    }
     var token = getToken();
     options = options || {};
     options.headers = options.headers || {};
-    if (token) options.headers['x-auth-token'] = token;
+    if (token) {
+      options.headers['x-auth-token'] = token;
+      options.headers['Authorization'] = 'Bearer ' + token;
+    }
     
     if (options.body && !(options.body instanceof FormData)) {
       options.headers['Content-Type'] = 'application/json';
@@ -66,15 +83,17 @@
 
   // ─── View Navigation ──────────────────────────────────────
   var VIEWS = {
-    dashboard: { el: 'dashboard-view', label: 'Tổng quan' },
-    services:  { el: 'dashboard-view', label: 'Quản lý dịch vụ' },
-    bookings:  { el: 'dashboard-view', label: 'Đơn đặt dịch vụ' },
-    messages:  { el: 'messages-view',  label: 'Tin nhắn khách hàng', load: loadMessages },
-    reviews:   { el: 'messages-view',  label: 'Đánh giá từ khách hàng', load: loadMessages },
-    analytics: { el: 'analytics-view', label: 'Thống kê chi tiết', load: loadAnalytics },
-    revenue:   { el: 'analytics-view', label: 'Báo cáo doanh thu', load: loadAnalytics },
-    customers: { el: 'dashboard-view', label: 'Quản lý khách hàng' },
-    settings:  { el: 'dashboard-view', label: 'Cài đặt hệ thống' },
+    'public-home': { el: 'public-home-view', label: 'Trang chủ Website',     load: function() { if(window.initPublicHome) window.initPublicHome(); } },
+    home:      { el: 'home-view',     label: 'Dashboard Tổng quan',      load: function() { if(window.initOverview) window.initOverview(); } },
+    overview:  { el: 'home-view',     label: 'Trang chủ',             load: function() { if(window.initOverview) window.initOverview(); } },
+    profile:   { el: 'profile-view',  label: 'Hồ sơ doanh nghiệp',   load: function() { if(window.initProfile) window.initProfile(); } },
+    dashboard: { el: 'dashboard-view', label: 'Bảng điều khiển' },
+    services:  { el: 'services-view',  label: 'Quản lý dịch vụ',     load: function() { if(window.initServiceManagement) window.initServiceManagement(); } },
+    bookings:  { el: 'bookings-view',  label: 'Quản lý đơn hàng',    load: function() { if(window.initBookingManagement) window.initBookingManagement(); } },
+    messages:  { el: 'messages-view',  label: 'Tin nhắn khách hàng',  load: function() { if(window.initMessageManagement) window.initMessageManagement(); } },
+    reviews:   { el: 'reviews-view',   label: 'Đánh giá dịch vụ',       load: function() { if(window.initReviewManagement) window.initReviewManagement(); } },
+    'user-activity': { el: 'user-activity-view', label: 'Hoạt động người dùng', load: function() { if(window.initUserActivity) window.initUserActivity(); } },
+    'business-performance': { el: 'business-performance-view', label: 'Hiệu suất kinh doanh', load: function() { if(window.initBusinessPerformance) window.initBusinessPerformance(); } },
     support:   { el: 'support-view',   label: 'Hỗ trợ đối tác', load: loadSupport }
   };
 
@@ -249,6 +268,9 @@
     var cfg = VIEWS[viewKey];
     if (!cfg) return;
 
+    // Save active view state to persist across reloads
+    localStorage.setItem('biz_active_view', viewKey);
+
     // Show target view
     var targetEl = document.getElementById(cfg.el);
     if (targetEl) targetEl.style.display = '';
@@ -267,6 +289,8 @@
     // Load data if needed
     if (cfg.load) cfg.load();
   }
+
+  window.navigateToView = showView;
 
   // Bind nav clicks
   document.querySelectorAll('[data-view]').forEach(function (a) {
@@ -528,7 +552,7 @@
       var payload = JSON.parse(atob(token.split('.')[1]));
       var nameEl = document.querySelector('.user-chip');
       if (nameEl && payload.displayName) {
-        nameEl.innerHTML = '<div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#667eea,#764ba2);display:flex;align-items:center;justify-content:center;font-size:13px">🏨</div>' + payload.displayName + ' ▾';
+        nameEl.innerHTML = '<div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#667eea,#764ba2);display:flex;align-items:center;justify-content:center;font-size:13px;color:#fff">🏨</div>' + payload.displayName + ' ▾';
       }
     } catch(e) {}
 
@@ -606,7 +630,7 @@
       });
 
     // 3. Sync Bookings (Dữ liệu thực từ /api/bookings)
-    apiFetch(API + '/api/bookings/business')
+    apiFetch(API + '/api/bookings')
       .then(function(json) {
         if (json.success && json.data) {
           const bookings = json.data;
@@ -621,16 +645,16 @@
 
           if (typeof renderBookings === 'function') {
             const mappedBookings = bookings.map(b => ({
-              id: b.bookingId,
+              id: (b.bookingId || b._id || '').toString().slice(-6).toUpperCase(),
               rawId: b._id,
-              customerName: b.customerName,
-              serviceName: b.placeName,
+              customerName: b.customerName || (b.user && b.user.name) || 'Khách hàng',
+              serviceName: b.service?.name || b.placeName || '—',
               bookingDate: fmtDate(b.createdAt),
-              useDate: fmtDate(b.tourDate || b.useDate),
-              value: b.totalPrice,
+              useDate: fmtDate(b.date || b.tourDate || b.useDate),
+              value: b.totalPrice || 0,
               status: b.status,
               paymentMethod: b.paymentMethod,
-              paymentStatus: b.paymentStatus
+              paymentStatus: b.paymentStatus || (b.paymentMethod === 'contact' ? 'unpaid' : 'paid') // Fallback logic
             }));
             renderBookings(mappedBookings, 'booking-table', { limit: 10, title: 'Đơn đặt chỗ mới từ khách hàng' });
           }
@@ -642,7 +666,7 @@
   window.updateBookingStatus = function(id, newStatus) {
     if (!confirm('Bạn có chắc chắn muốn ' + (newStatus === 'confirmed' ? 'duyệt' : 'từ chối') + ' đơn này?')) return;
     
-    apiFetch(API + '/api/bookings/' + id + '/status', {
+    apiFetch(API + '/api/bookings/' + id, {
       method: 'PUT',
       body: JSON.stringify({ status: newStatus })
     }).then(function(json) {
@@ -659,7 +683,19 @@
     loadPublicStats();
     if (getToken()) {
       window.syncAllData();
+      
+      // Khôi phục view cuối cùng người dùng đã truy cập
+      const savedView = localStorage.getItem('biz_active_view');
+      if (savedView && VIEWS[savedView]) {
+        // Delay nhẹ để đảm bảo các module khác đã kịp init (ví dụ: serviceManagement)
+        setTimeout(() => showView(savedView), 100);
+      } else {
+        showView('home');
+      }
     }
   });
+
+  window.showView = showView;
+  window.navigateToView = showView;
 
 })();

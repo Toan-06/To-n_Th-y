@@ -207,8 +207,8 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
   }
 
   // Start polling
-  setInterval(updateNotificationBadge, 30000);
-  setTimeout(updateNotificationBadge, 2000);
+  setInterval(updateNotificationBadge, 60000); // Check every 1 minute instead of 30s
+  setTimeout(updateNotificationBadge, 3000);
 
   function toggleNotificationDrawer() {
     const drawer = document.getElementById('wander-notif-drawer') || createNotificationDrawer();
@@ -388,7 +388,18 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
   }
 
 
-  function syncAuthUI() {
+  let syncInProgress = false;
+  let lastSyncTime = 0;
+  const SYNC_THROTTLE = 5000; // 5 seconds
+
+  async function syncAuthUI() {
+    if (syncInProgress) return;
+    const now = Date.now();
+    if (now - lastSyncTime < SYNC_THROTTLE) return;
+
+    syncInProgress = true;
+    lastSyncTime = now;
+
     const token = localStorage.getItem('wander_token');
     const authBtns = document.querySelectorAll("[data-auth-open]");
     const profileTrays = document.querySelectorAll("[data-auth-show]");
@@ -439,42 +450,45 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
         `;
       }
 
-      fetch('/api/auth/user/rank?t=' + Date.now(), { headers: { 'x-auth-token': token } })
-        .then(r => {
-          if (r.status === 401) {
-            // Token invalid or expired - clear it to avoid console spam
-            localStorage.removeItem('wander_token');
-            return null;
+      try {
+        const r = await fetch('/api/auth/user/rank?t=' + Date.now(), { headers: { 'x-auth-token': token } });
+        if (r.status === 401) {
+          localStorage.removeItem('wander_token');
+          return;
+        }
+        const data = await r.json();
+        if (data && data.success) {
+          const fullDis = data.displayName || data.name || initialName;
+          if (userNameEl) {
+            userNameEl.innerHTML = `
+               <div style="display:flex; flex-direction:column; line-height:1.2;">
+                 <span style="font-weight:700; color:#fff; font-size:0.95rem;">${fullDis.replace(/</g, '&lt;')}</span>
+                 <span style="font-size:0.7rem; color:var(--text-muted); opacity:0.8;">${data.customId || ""}</span>
+                 <span style="font-size:0.7rem; color:var(--text-muted);">${(data.email || u.email || "").replace(/</g, '&lt;')}</span>
+               </div>
+             `;
           }
-          return r.json();
-        })
-        .then(data => {
-          if (data && data.success) {
-            const fullDis = data.displayName || data.name || initialName;
-            if (userNameEl) {
-              userNameEl.innerHTML = `
-                 <div style="display:flex; flex-direction:column; line-height:1.2;">
-                   <span style="font-weight:700; color:#fff; font-size:0.95rem;">${fullDis.replace(/</g, '&lt;')}</span>
-                   <span style="font-size:0.7rem; color:var(--text-muted); opacity:0.8;">${data.customId || ""}</span>
-                   <span style="font-size:0.7rem; color:var(--text-muted);">${(data.email || u.email || "").replace(/</g, '&lt;')}</span>
-                 </div>
-               `;
-            }
-            if (userAvatarImg && data.avatar) {
-              userAvatarImg.src = data.avatar;
-              userAvatarImg.style.display = 'block';
-              userAvatarImg.removeAttribute('hidden');
-              if (userInitial) userInitial.style.display = 'none';
-            }
-            if (headerRankEl) {
-              headerRankEl.innerHTML = getRankBadgeHTML(data.rank, data.rankTier);
-              headerRankEl.style.display = 'flex';
-              headerRankEl.style.alignItems = 'center';
-            }
+          if (userAvatarImg && data.avatar) {
+            userAvatarImg.src = data.avatar;
+            userAvatarImg.style.display = 'block';
+            userAvatarImg.removeAttribute('hidden');
+            if (userInitial) userInitial.style.display = 'none';
           }
-        }).catch(err => console.error("Auth sync API error:", err));
+          if (headerRankEl) {
+            headerRankEl.innerHTML = getRankBadgeHTML(data.rank, data.rankTier);
+            headerRankEl.style.display = 'flex';
+            headerRankEl.style.alignItems = 'center';
+          }
+        }
+      } catch (err) {
+        console.error("Auth sync API error:", err);
+      }
 
-    } catch (e) { console.error("Auth sync error", e); }
+    } catch (e) {
+      console.error("Auth sync error", e);
+    } finally {
+      syncInProgress = false;
+    }
   }
 
   // Big-Tech: One-time global listener for auth-related actions
@@ -663,16 +677,6 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
       const script1 = document.createElement('script');
       script1.src = 'chat-brain.js';
       document.body.appendChild(script1);
-    }
-    if (!document.querySelector('script[src*="voice-helper.js"]')) {
-      const script2 = document.createElement('script');
-      script2.src = 'voice-helper.js';
-      script2.onload = () => {
-        if (window.WanderUI && window.WanderUI.setupVoiceIntegration) {
-          window.WanderUI.setupVoiceIntegration();
-        }
-      };
-      document.body.appendChild(script2);
     }
 
     if (document.getElementById('global-chat-fab-wrap')) return;
@@ -938,6 +942,19 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
       </div>
     `;
     while (div.firstChild) document.body.appendChild(div.firstChild);
+
+    // Load Voice Helper AFTER UI is in DOM to prevent "element not found" errors
+    if (!document.querySelector('script[src*="voice-helper.js"]')) {
+      const script2 = document.createElement('script');
+      script2.src = 'voice-helper.js';
+      script2.onload = () => {
+        console.log("🎙️ WanderUI: voice-helper.js loaded.");
+        if (window.WanderUI && window.WanderUI.setupVoiceIntegration) {
+          window.WanderUI.setupVoiceIntegration();
+        }
+      };
+      document.body.appendChild(script2);
+    }
 
     // Add global listener for close buttons
     document.addEventListener('click', (e) => {
@@ -1553,10 +1570,18 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
       const isOpen = !panel.hidden;
       panel.hidden = isOpen;
       fab.setAttribute('aria-expanded', !isOpen);
+
+      // --- Stop AI voice when panel is closed ---
+      if (isOpen && window.voiceGuide) {
+          window.voiceGuide.cancelAll();
+      }
     }
 
     fab.addEventListener('click', togglePanel);
-    closeBtn.addEventListener('click', togglePanel);
+    closeBtn.addEventListener('click', (e) => {
+        togglePanel();
+        if (window.voiceGuide) window.voiceGuide.cancelAll();
+    });
 
     // Also support external toggle buttons (like in header or hero)
     document.querySelectorAll('[data-chat-toggle]').forEach(btn => {
@@ -1588,12 +1613,24 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
 
             const micBtn = document.getElementById('companion-toggle');
             if (micBtn) {
+                // Single Click: Toggle or Interrupt
                 micBtn.onclick = (e) => {
                     e.preventDefault();
-                    if (window.voiceGuide.isListening) {
+                    if (window.voiceGuide.synth && window.voiceGuide.synth.speaking) {
+                        // AI is speaking: Stop it and start listening
+                        window.voiceGuide.forceInterrupt();
+                    } else if (window.voiceGuide.isListening) {
                         window.voiceGuide.stop();
                     } else {
                         window.voiceGuide.start();
+                    }
+                };
+                // Double Click: Stop Everything
+                micBtn.ondblclick = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (window.voiceGuide) {
+                        window.voiceGuide.cancelAll();
                     }
                 };
             }
@@ -1636,7 +1673,7 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
       { text: '📸 Điểm check-in', query: 'Những địa điểm chụp ảnh đẹp nhất' }
     ];
 
-    function appendMsg(text, role, isHtml) {
+    function appendMsg(text, role, isHtml, skipCache = false) {
       if (!text) return;
 
       let displayInfo = text;
@@ -1658,22 +1695,31 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
       if (isHtml) msg.innerHTML = displayInfo;
       else msg.textContent = displayInfo;
       log.appendChild(msg);
-      log.scrollTop = log.scrollHeight;
+      
+      // Debounce scrolling to bottom to avoid layout thrashing
+      if (!window._chatScrollTimeout) {
+        window._chatScrollTimeout = setTimeout(() => {
+          log.scrollTop = log.scrollHeight;
+          window._chatScrollTimeout = null;
+        }, 50);
+      }
 
       // Nếu có dữ liệu proposals, render các thẻ tương ứng
-      if (proposalsData) {
+      if (proposalsData && Array.isArray(proposalsData)) {
           renderProposalOptions(proposalsData);
       }
 
       // Cache to localStorage for instant load on next page
-      try {
-        if (!text.includes("Đang tải") && !text.includes("đang suy nghĩ")) {
-          let arr = JSON.parse(localStorage.getItem('wander_shared_chat') || '[]');
-          arr.push({ role, text });
-          if (arr.length > 50) arr = arr.slice(arr.length - 50);
-          localStorage.setItem('wander_shared_chat', JSON.stringify(arr));
-        }
-      } catch (e) { console.warn("Cache error", e); }
+      if (!skipCache) {
+        try {
+          if (!text.includes("Đang tải") && !text.includes("đang suy nghĩ")) {
+            let arr = JSON.parse(localStorage.getItem('wander_shared_chat') || '[]');
+            arr.push({ role, text });
+            if (arr.length > 50) arr = arr.slice(arr.length - 50);
+            localStorage.setItem('wander_shared_chat', JSON.stringify(arr));
+          }
+        } catch (e) { console.warn("Cache error", e); }
+      }
     }
 
     function loadSharedChat() {
@@ -1682,12 +1728,8 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
         const arr = JSON.parse(localStorage.getItem('wander_shared_chat') || '[]');
         if (arr.length > 0) {
           arr.forEach(m => {
-            const msg = document.createElement('div');
-            msg.className = 'chat-bubble chat-bubble--' + (m.role === 'user' ? 'user' : 'bot');
-            msg.textContent = m.text;
-            log.appendChild(msg);
+            appendMsg(m.text, m.role, false, true); // skipCache = true
           });
-          log.scrollTop = log.scrollHeight;
         } else if (!currentSessionId) {
           appendMsg('Xin chào! Tôi là Trợ lý WanderViệt 🌟 Hỏi tôi bất cứ điều gì về du lịch Việt Nam nhé!', 'bot');
           renderSuggestions(DEFAULT_SUGGESTIONS);
@@ -1717,7 +1759,7 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
           if (json.success && json.messages && json.messages.length > 0) {
             log.innerHTML = ''; // Only clear if we actually have server data to replace
             json.messages.forEach(m => {
-              appendMsg(m.text, m.role === 'user' ? 'user' : 'bot');
+              appendMsg(m.text, m.role === 'user' ? 'user' : 'bot', false, true); // skipCache = true
             });
             // Update cache with server truth
             localStorage.setItem('wander_shared_chat', JSON.stringify(json.messages.map(m => ({
@@ -1860,7 +1902,7 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
 
         log.removeChild(tempBubble);
 
-        if (resData.success) {
+        if (resData && resData.success) {
             const aiReply = resData.answer || resData.reply;
             appendMsg(aiReply, 'bot');
 
@@ -1886,11 +1928,14 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
                 renderDiscoveryCarousel(resData.discoveryPlaces);
             }
         } else {
-            appendMsg(resData.answer || 'Xin lỗi, trợ lý đang bận. Vui lòng thử lại!', 'bot');
+            console.warn("Chatbot: API returned failure or invalid data", resData);
+            const errMsg = (resData && typeof resData === 'string') ? resData : (resData?.answer || 'Trợ lý đang bận, thử lại sau nhé.');
+            appendMsg(errMsg, 'bot');
         }
       } catch (err) {
-        if (log.contains(tempBubble)) log.removeChild(tempBubble);
-        appendMsg('Lỗi kết nối. Vui lòng thử lại.', 'bot');
+        console.error("Chatbot Submit Error:", err);
+        if (log && log.contains(tempBubble)) log.removeChild(tempBubble);
+        appendMsg('Lỗi kết nối AI. Vui lòng kiểm tra internet hoặc tải lại trang.', 'bot');
       }
     });
 
@@ -2309,6 +2354,37 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
         langDropdown.classList.remove('is-active');
       });
     }
+
+    // Expose internal functions for voice-helper.js and chat-brain.js
+    window.WanderChat = {
+      appendMsg: appendMsg,
+      togglePanel: togglePanel,
+      renderProposalCard: renderProposalCard,
+      renderProposalOptions: renderProposalOptions,
+      renderItineraryCard: renderItineraryCard,
+      renderDiscoveryCarousel: renderDiscoveryCarousel,
+      sendMessage: async (text) => {
+        if (!text) return;
+        
+        // Trigger the form submission logic synthetically
+        const form = document.getElementById('global-chat-form');
+        const input = document.getElementById('global-chat-input');
+        if (input) input.value = text;
+        if (form) form.dispatchEvent(new Event('submit'));
+      }
+    };
+    // Compatibility alias for chat-brain.js
+    window.displayAIMessage = (data) => {
+      if (typeof data === 'string') {
+        appendMsg(data, 'bot');
+      } else if (data && data.answer) {
+        appendMsg(data.answer, 'bot');
+        if (data.proposal) renderProposalCard(data.proposal);
+        if (data.itineraryCard) renderItineraryCard(data.itineraryCard);
+        if (data.proposals) renderProposalOptions(data.proposals);
+        if (data.discoveryPlaces) renderDiscoveryCarousel(data.discoveryPlaces);
+      }
+    };
   }
 
 
@@ -2947,13 +3023,20 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
       });
     }, { rootMargin: '200px' });
 
+    let lazyTimeout;
     const refreshLazy = () => {
-      document.querySelectorAll('img[data-src]').forEach(img => observer.observe(img));
+      clearTimeout(lazyTimeout);
+      lazyTimeout = setTimeout(() => {
+        document.querySelectorAll('img[data-src]').forEach(img => observer.observe(img));
+      }, 150);
     };
 
     refreshLazy();
-    // MutationObserver to watch for newly added images
-    const mut = new MutationObserver(refreshLazy);
+    // MutationObserver to watch for newly added images - debounced to avoid lag
+    const mut = new MutationObserver((mutations) => {
+      const hasNewNodes = mutations.some(m => m.addedNodes.length > 0);
+      if (hasNewNodes) refreshLazy();
+    });
     mut.observe(document.body, { childList: true, subtree: true });
   }
 

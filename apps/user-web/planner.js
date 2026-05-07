@@ -37,25 +37,49 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   if (btnModeForm && btnModeDiscovery) {
-    btnModeForm.addEventListener('click', () => {
-      btnModeForm.classList.add('active');
-      btnModeDiscovery.classList.remove('active');
-      document.getElementById('stepBasic').style.display = 'flex';
-      document.getElementById('stepDiscovery').style.display = 'none';
-      document.getElementById('stepSmartWizard').style.display = 'none';
-    });
-    btnModeDiscovery.addEventListener('click', () => {
-      btnModeDiscovery.classList.add('active');
-      btnModeForm.classList.remove('active');
-      document.getElementById('stepDiscovery').style.display = 'flex';
-      document.getElementById('stepBasic').style.display = 'none';
-      document.getElementById('stepSmartWizard').style.display = 'none';
+    const btnModeCompare = document.getElementById('btnModeCompare');
+    
+    function switchPath(activeBtn, targetStepId) {
+      // Clear active class from all buttons
+      [btnModeForm, btnModeDiscovery, btnModeCompare].forEach(btn => btn?.classList.remove('active'));
+      activeBtn.classList.add('active');
       
+      // Hide all steps
+      [stepBasic, document.getElementById('stepDiscovery'), stepSmartWizard, document.getElementById('stepCompare')].forEach(step => {
+        if (step) step.style.display = 'none';
+      });
+
+      // Reset comparison mode visuals if switching away from compare
+      const container = document.getElementById('timelineContent');
+      if (container) container.classList.remove('comparison-mode-active');
+      const saveBtn = document.getElementById('btnSaveTrip');
+      if (saveBtn) saveBtn.style.display = 'inline-flex';
+      
+      // Show target step
+      const targetStep = document.getElementById(targetStepId);
+      if (targetStep) targetStep.style.display = 'flex';
+    }
+
+    btnModeForm.addEventListener('click', () => {
+      switchPath(btnModeForm, 'stepBasic');
+    });
+
+    btnModeDiscovery.addEventListener('click', () => {
+      switchPath(btnModeDiscovery, 'stepDiscovery');
       if (discoveryHistory.length === 0 && discoveryMessages.children.length === 0) {
         addDiscoveryBubble("Chào bạn! Tôi là WanderAI. Hãy cho tôi biết ngân sách và sở thích, tôi sẽ gợi ý cho bạn nhé! ✨", "ai");
         renderDiscoverySuggestions();
       }
     });
+
+    if (btnModeCompare) {
+      btnModeCompare.addEventListener('click', () => {
+        switchPath(btnModeCompare, 'stepCompare');
+        if (typeof window.loadSavedTripsForComparison === 'function') {
+           window.loadSavedTripsForComparison();
+        }
+      });
+    }
   }
 
   function renderDiscoverySuggestions(category) {
@@ -257,6 +281,7 @@ document.addEventListener('DOMContentLoaded', function () {
       this.data.budget = document.getElementById('budget').value;
       this.data.tripDate = document.getElementById('tripDate').value;
       this.data.companion = document.getElementById('companion').value;
+      this.data.optionCount = document.getElementById('optionCount')?.value || "1";
 
       document.getElementById('stepBasic').style.display = 'none';
       document.getElementById('stepDiscovery').style.display = 'none';
@@ -329,11 +354,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
       // --- Nút "Bỏ qua tất cả" ---
       const topRow = document.createElement('div');
-      topRow.style.cssText = 'display:flex;justify-content:flex-end;margin-bottom:8px;';
+      topRow.style.cssText = 'display:flex;justify-content:center;margin-bottom:20px;padding:10px;background:rgba(255,255,255,0.03);border-radius:12px;border:1px dashed rgba(255,255,255,0.1);';
       const skipAllBtn = document.createElement('button');
       skipAllBtn.type = 'button';
       skipAllBtn.className = 'chip-refresh-btn';
-      skipAllBtn.innerHTML = '⚡ Bỏ qua — AI tự chọn';
+      skipAllBtn.style.cssText = 'background:rgba(245,158,11,0.1);color:#f59e0b;border-color:rgba(245,158,11,0.3);padding:0.75rem 1.5rem;font-weight:700;';
+      skipAllBtn.innerHTML = '⚡ Bỏ qua — AI tự chọn hết cho tôi';
       skipAllBtn.onclick = () => this.handleMessage("Tôi muốn AI tự chọn tất cả, lên lịch ngay");
       topRow.appendChild(skipAllBtn);
       container.appendChild(topRow);
@@ -403,8 +429,11 @@ document.addEventListener('DOMContentLoaded', function () {
     },
 
     toggleOption(g, opt, chip, type) {
-      if (type === 'single_select') {
-        // Support both legacy and premium chip classes
+      // Force single_select for specific critical groups even if backend says multi
+      const forcedSingleGroups = ['stay', 'pace', 'companion', 'accommodation', 'vibe'];
+      const actualType = forcedSingleGroups.includes(g) ? 'single_select' : type;
+
+      if (actualType === 'single_select') {
         const allChips = chip.parentElement.querySelectorAll('.chat-chip, .chat-chip-premium');
         allChips.forEach(c => c.classList.remove('active', 'is-selected'));
         
@@ -470,11 +499,21 @@ document.addEventListener('DOMContentLoaded', function () {
   window.WanderPlanner = window.WanderPlanner || {};
   window.WanderPlanner.prefill = (data) => SmartWizard.prefillForm(data);
   window.WanderPlanner.getWizardData = () => SmartWizard.data;
+  window.WanderPlanner.getPlanHistory = () => planHistory;
+  window.WanderPlanner.getCurrentPlanIndex = () => currentPlanIndex;
+  window.WanderPlanner.renderItinerary = (p, dst, d, dt) => renderItinerary(p, dst, d, dt);
+  window.WanderPlanner.renderMultiItinerary = (ps, dsts) => renderMultiItinerary(ps, dsts);
 
   async function doGenerate(data) {
     placeholder.style.display = 'none';
+    loader.style.display = 'flex';
     resultContainer.style.display = 'none';
-    refineBox.style.display = 'none';
+    
+    // Clear comparison mode
+    const container = document.getElementById('timelineContent');
+    if (container) container.classList.remove('comparison-mode-active');
+    const saveBtn = document.getElementById('btnSaveTrip');
+    if (saveBtn) saveBtn.style.display = 'inline-flex';
     loader.style.display = 'flex';
     
     try {
@@ -490,10 +529,28 @@ document.addEventListener('DOMContentLoaded', function () {
       const json = await res.json();
       if (json.success) {
         currentItineraryId = json.itineraryId;
-        planHistory = [json.plan];
+        
+        // Handle multiple plans if they exist, or simulate for UI testing
+        if (json.plans && json.plans.length > 0) {
+          planHistory = json.plans;
+        } else if (json.plan) {
+          planHistory = [json.plan];
+          // Nếu yêu cầu 2 mà chỉ trả 1, ta có thể clone hoặc để người dùng tự tinh chỉnh
+        }
+        
         currentPlanIndex = 0;
         renderVersionTabs();
-        renderItinerary(json.plan, data.destination, data.days, data.tripDate);
+        
+        if (data.optionCount === "2" && planHistory.length >= 2) {
+          renderDualItinerary(planHistory[0], planHistory[1], data.destination, data.days);
+          // Tự động kích hoạt view So sánh/Phân tích sau khi render xong
+          setTimeout(() => {
+            if (typeof showComparisonView === 'function') showComparisonView();
+          }, 500);
+        } else {
+          renderItinerary(planHistory[0], data.destination, data.days, data.tripDate);
+        }
+        
         resultContainer.style.display = 'block';
         refineBox.style.display = 'block';
       } else {
@@ -514,61 +571,88 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   function renderItinerary(plan, dest, days, date) {
-    const html = `
-      <div class="timeline-header-premium-v2">
-        <div class="timeline-header-content">
-          <div class="destination-badge-v2">📍 ${dest}</div>
-          <h2 class="main-itinerary-title-v2">Hành trình khám phá ${days} ngày</h2>
-          <p class="timeline-summary-v2">${plan.tripSummary || plan.summary || 'Kế hoạch du lịch được tối ưu hóa bởi WanderAI.'}</p>
-        </div>
-        
-        <div class="itinerary-stats-grid-v2">
-          <div class="stat-box-v2">
-            <span class="stat-label-v2">Thời gian</span>
-            <span class="stat-value-v2">${days} Ngày</span>
-          </div>
-          <div class="stat-box-v2">
-            <span class="stat-label-v2">Dự kiến chi phí</span>
-            <span class="stat-value-v2">${plan.estimatedCost || plan.totalEstimatedCost || '---'}</span>
-          </div>
-          <div class="stat-box-v2">
-            <span class="stat-label-v2">Phong cách</span>
-            <span class="stat-value-v2">Trải nghiệm</span>
-          </div>
-        </div>
-      </div>
+    const container = document.getElementById('timelineContent');
+    if (container) {
+      container.classList.remove('dual-plan-view');
+      container.innerHTML = generateItineraryHtml(plan, dest, days, 1);
+    }
+  }
 
-      <div class="timeline-container-v2">
-        ${(plan.itinerary || []).map((day, idx) => {
-          const dayNum = day.day || (idx + 1);
-          return `
-          <div class="itinerary-day-block-v2" style="animation-delay: ${idx * 0.1}s">
-            <div class="day-header-meta-v2">
-              <h3>Ngày ${dayNum.toString().replace(/Ngày /g, '')}</h3>
-              <span class="day-subtitle-v2">${day.theme || 'Khám phá & Trải nghiệm'}</span>
+  function renderDualItinerary(plan1, plan2, dest, days) {
+    const container = document.getElementById('timelineContent');
+    if (container) {
+      container.classList.add('dual-plan-view');
+      container.innerHTML = `
+        ${generateItineraryHtml(plan1, dest, days, 1)}
+        ${generateItineraryHtml(plan2, dest, days, 2)}
+      `;
+    }
+  }
+
+  function renderMultiItinerary(plans, destinations) {
+    const container = document.getElementById('timelineContent');
+    if (container) {
+      container.classList.add('dual-plan-view');
+      // Mặc định so sánh cho 3 ngày để đồng bộ giao diện
+      const days = 3; 
+      
+      container.innerHTML = plans.map((plan, idx) => {
+        return generateItineraryHtml(plan, destinations[idx], days, idx + 1);
+      }).join('');
+    }
+  }
+
+  function generateItineraryHtml(plan, dest, days, planNum) {
+    return `
+      <div class="itinerary-column-wrapper">
+        <div class="timeline-header-premium-v2">
+          <div class="timeline-header-content">
+            <div style="display:flex; justify-content: space-between; align-items: center;">
+               <div class="destination-badge-v2">📍 ${dest}</div>
+               <span class="version-badge" style="background:#3b82f6; color:white; padding:2px 8px; border-radius:4px; font-size:0.7rem; font-weight:700;">PHƯƠNG ÁN ${planNum}</span>
             </div>
-            <div class="activities-list">
-              ${(day.activities || []).map(act => `
-                <div class="premium-activity-card-v2">
-                  <div class="activity-time-slot-v2">${act.time || '--:--'}</div>
-                  <div class="activity-main-info-v2">
-                    <h4 class="activity-name-v2">${act.task || act.activity || act.name || ''}</h4>
-                    <div class="activity-location-tag-v2">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
-                      <span>${act.location || 'Địa điểm chưa rõ'}</span>
-                    </div>
-                    <p class="activity-desc-v2">${act.description || act.desc || ''}</p>
-                    ${act.cost ? `<div class="activity-budget-pill-v2">💰 ${act.cost}</div>` : ''}
-                  </div>
-                </div>
-              `).join('')}
+            <h2 class="main-itinerary-title-v2" style="font-size: 1.4rem; margin-top: 0.5rem;">Hành trình ${days} ngày</h2>
+            <p class="timeline-summary-v2" style="font-size: 0.85rem;">${plan.tripSummary || plan.summary || 'Kế hoạch du lịch được tối ưu hóa bởi WanderAI.'}</p>
+          </div>
+          
+          <div class="itinerary-stats-grid-v2" style="gap: 0.5rem;">
+            <div class="stat-box-v2">
+              <span class="stat-label-v2">Thời gian</span>
+              <span class="stat-value-v2" style="font-size: 1rem;">${days} Ngày</span>
+            </div>
+            <div class="stat-box-v2">
+              <span class="stat-label-v2">Dự kiến chi phí</span>
+              <span class="stat-value-v2" style="font-size: 1rem;">${plan.estimatedCost || plan.totalEstimatedCost || '---'}</span>
             </div>
           </div>
-          `;
-        }).join('')}
+        </div>
+
+        <div class="timeline-container-v2">
+          ${(plan.itinerary || []).map((day, idx) => {
+            const dayNum = day.day || (idx + 1);
+            return `
+            <div class="itinerary-day-block-v2" style="margin-bottom: 1.5rem;">
+              <div class="day-header-meta-v2" style="margin-bottom: 0.75rem;">
+                <h3 style="font-size: 1.2rem;">Ngày ${dayNum.toString().replace(/Ngày /g, '')}</h3>
+              </div>
+              <div class="activities-list">
+                ${(day.activities || []).map(act => `
+                  <div class="premium-activity-card-v2" style="padding: 1rem; gap: 1rem; margin-bottom: 0.75rem;">
+                    <div class="activity-time-slot-v2" style="min-width: 60px; font-size: 0.85rem;">${act.time || '--:--'}</div>
+                    <div class="activity-main-info-v2">
+                      <h4 class="activity-name-v2" style="font-size: 1rem;">${act.task || act.activity || act.name || ''}</h4>
+                      <p class="activity-desc-v2" style="font-size: 0.8rem; margin-bottom: 0.5rem;">${act.description || act.desc || ''}</p>
+                      ${act.cost ? `<div class="activity-budget-pill-v2" style="font-size: 0.7rem;">💰 ${act.cost}</div>` : ''}
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+            `;
+          }).join('')}
+        </div>
       </div>
     `;
-    document.getElementById('timelineContent').innerHTML = html;
   }
 
   function renderVersionTabs() {
