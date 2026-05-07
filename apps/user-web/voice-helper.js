@@ -50,6 +50,7 @@ var VoiceGuide = /*#__PURE__*/function () {
       this.recognition.lang = 'vi-VN';
       this.recognition.continuous = false;
       this.recognition.interimResults = true;
+      this.recognition.maxAlternatives = 5;
       this.recognition.onstart = function () {
         _this.isListening = true;
         _this.setStatus('listening');
@@ -59,24 +60,44 @@ var VoiceGuide = /*#__PURE__*/function () {
         var interimTranscript = '';
         var finalTranscript = '';
         for (var i = event.resultIndex; i < event.results.length; ++i) {
-          if (event.results[i].isFinal) {
-            finalTranscript += event.results[i][0].transcript;
+          var result = event.results[i];
+          if (result.isFinal) {
+            // Lấy kết quả tốt nhất
+            var best = result[0].transcript;
+            
+            // Nếu kết quả đầu có vẻ bị lọc (chứa dấu *) hoặc quá ngắn, kiểm tra các phương án thay thế
+            if (result.length > 1 && (best.includes('*') || best.length < 2)) {
+                for (var j = 1; j < result.length; j++) {
+                    if (!result[j].transcript.includes('*')) {
+                        best = result[j].transcript;
+                        break;
+                    }
+                }
+            }
+            finalTranscript += best;
           } else {
-            interimTranscript += event.results[i][0].transcript;
+            interimTranscript += result[0].transcript;
           }
         }
+        
         _this.caption.innerText = finalTranscript || interimTranscript || "Đang nghe...";
+        
         if (finalTranscript) {
-          _this.setStatus('thinking');
+           var textToSend = _this.cleanupTranscript(finalTranscript);
+           if (!textToSend) return; 
 
-          // 1. Ưu tiên callback bên ngoài (như trong navigator.js)
-          if (typeof _this.onResultCallback === 'function') {
-            _this.onResultCallback(finalTranscript);
-          }
-          // 2. Nếu không có callback, dùng logic mặc định của Companion
-          else if (window.ChatBrain) {
-            window.ChatBrain.sendMessage(finalTranscript);
-          }
+           _this.setStatus('thinking');
+           
+           clearTimeout(_this.sendTimeout);
+           _this.sendTimeout = setTimeout(function() {
+              if (typeof _this.onResultCallback === 'function') {
+                _this.onResultCallback(textToSend);
+              } else if (window.WanderChat && window.WanderChat.sendMessage) {
+                window.WanderChat.sendMessage(textToSend);
+              } else if (window.ChatBrain) {
+                window.ChatBrain.sendMessage(textToSend);
+              }
+           }, 500);
         }
       };
       this.recognition.onerror = function (event) {
@@ -112,20 +133,28 @@ var VoiceGuide = /*#__PURE__*/function () {
       this.currentStatus = status;
       console.log("State:", status);
 
+      // Re-find elements if they were missing (lazy init)
+      if (!this.overlay) this.overlay = document.getElementById('voice-overlay');
+      if (!this.caption) this.caption = document.getElementById('live-caption');
+
       // Cập nhật UI
-      if (status === 'idle') {
-        this.overlay.classList.remove('is-active', 'is-listening', 'is-thinking', 'is-visible');
-        this.fab.classList.remove('is-listening');
-      } else {
-        this.overlay.classList.add('is-visible');
-        this.overlay.classList.remove('is-listening', 'is-thinking');
-        this.fab.classList.remove('is-listening');
-        if (status === 'listening') {
-          this.overlay.classList.add('is-listening');
-          this.fab.classList.add('is-listening');
-        } else if (status === 'thinking') {
-          this.overlay.classList.add('is-thinking');
+      if (this.overlay) {
+        if (status === 'idle') {
+          this.overlay.classList.remove('is-active', 'is-listening', 'is-thinking', 'is-visible');
+        } else {
+          this.overlay.classList.add('is-visible');
+          this.overlay.classList.remove('is-listening', 'is-thinking');
+          if (status === 'listening') {
+            this.overlay.classList.add('is-listening');
+          } else if (status === 'thinking') {
+            this.overlay.classList.add('is-thinking');
+          }
         }
+      }
+
+      if (this.fab) {
+          if (status === 'listening') this.fab.classList.add('is-listening');
+          else if (status === 'idle') this.fab.classList.remove('is-listening');
       }
 
       // Gọi callback bên ngoài nếu có (đồng bộ UI cho Navigator)
@@ -141,6 +170,11 @@ var VoiceGuide = /*#__PURE__*/function () {
       
       if (!this.isListening) {
         try {
+          // Tự động đồng bộ ngôn ngữ nhận diện (STT) theo cài đặt của người dùng
+          var userLang = localStorage.getItem('wander_chat_lang');
+          var map = { 'vi': 'vi-VN', 'en': 'en-US', 'jp': 'ja-JP', 'kr': 'ko-KR', 'fr': 'fr-FR' };
+          this.recognition.lang = (userLang && map[userLang]) ? map[userLang] : 'vi-VN';
+          
           this.recognition.start();
           console.log("🎙️ VoiceGuide: Mic started.");
         } catch (e) {
@@ -178,6 +212,31 @@ var VoiceGuide = /*#__PURE__*/function () {
       console.log("🔊 VoiceGuide: Cancelled all speech and recognition.");
     }
   }, {
+    key: "forceInterrupt",
+    value: function forceInterrupt() {
+      // 1. Dừng AI nói ngay lập tức
+      if (this.synth && this.synth.speaking) {
+        this.synth.cancel();
+      }
+      // 2. Dừng mic cũ (nếu có) để reset
+      if (this.isListening) {
+        try { this.recognition.abort(); } catch(e) {}
+      }
+      // 3. Bắt đầu nghe mới
+      setTimeout(() => this.start(), 100);
+    }
+  }, {
+    key: "cancelAll",
+    value: function cancelAll() {
+      if (this.synth) this.synth.cancel();
+      if (this.recognition) {
+        try { this.recognition.abort(); } catch(e) {}
+      }
+      this.isListening = false;
+      this.companionMode = false;
+      this.setStatus('idle');
+    }
+  }, {
     key: "setCompanionMode",
     value: function setCompanionMode(active) {
       this.companionMode = active;
@@ -188,20 +247,50 @@ var VoiceGuide = /*#__PURE__*/function () {
       }
     }
   }, {
+    key: "cleanupTranscript",
+    value: function cleanupTranscript(text) {
+      if (!text) return '';
+      var cleaned = text.trim();
+      // Xóa các dấu câu dư thừa ở cuối do browser tự thêm
+      cleaned = cleaned.replace(/[.?!]+$/, "");
+      if (cleaned.length > 0) {
+        cleaned = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+      }
+      return cleaned;
+    }
+  }, {
+    key: "detectLanguage",
+    value: function detectLanguage(text) {
+      var userLang = localStorage.getItem('wander_chat_lang');
+      if (userLang && userLang !== 'auto') {
+        var map = { 'vi': 'vi-VN', 'en': 'en-US', 'jp': 'ja-JP', 'kr': 'ko-KR', 'fr': 'fr-FR' };
+        if (map[userLang]) return map[userLang];
+      }
+      
+      if (/[\u3131-\uD79D]/.test(text)) return 'ko-KR';
+      if (/[\u3040-\u30ff]/.test(text)) return 'ja-JP';
+      
+      var viRegex = /[àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđ]/i;
+      if (viRegex.test(text)) return 'vi-VN';
+      
+      return 'en-US';
+    }
+  }, {
     key: "getBestVoice",
-    value: function getBestVoice() {
+    value: function getBestVoice(langCode) {
       var voices = this.synth.getVoices();
-      // Ưu tiên các giọng đọc chất lượng cao (Natural, Google, Microsoft)
-      var viVoices = voices.filter(function (v) {
-        return v.lang.includes('vi');
+      var targetLang = langCode || 'vi-VN';
+      var prefix = targetLang.split('-')[0];
+      
+      var filteredVoices = voices.filter(function (v) {
+        return v.lang.includes(prefix) || v.lang.includes(prefix.toUpperCase());
       });
-      if (viVoices.length === 0) return null;
+      if (filteredVoices.length === 0) return null;
 
-      // Tìm giọng "Natural" hoặc "Google" hoặc "Microsoft"
-      var premiumVoice = viVoices.find(function (v) {
+      var premiumVoice = filteredVoices.find(function (v) {
         return v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Microsoft');
       });
-      return premiumVoice || viVoices[0];
+      return premiumVoice || filteredVoices[0];
     }
   }, {
     key: "speak",
@@ -231,13 +320,17 @@ var VoiceGuide = /*#__PURE__*/function () {
       this.stop(); // Tắt mic khi nói để tránh Echo
       this.setStatus('speaking');
       var utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'vi-VN';
+      
+      var langCode = this.detectLanguage(text);
+      utterance.lang = langCode;
 
-      // Chọn giọng đọc tốt nhất
-      var bestVoice = this.getBestVoice();
+      // Chọn giọng đọc tốt nhất theo ngôn ngữ
+      var bestVoice = this.getBestVoice(langCode);
       if (bestVoice) {
         utterance.voice = bestVoice;
-        console.log("Using Voice:", bestVoice.name);
+        console.log("Using Voice:", bestVoice.name, "Lang:", langCode);
+      } else {
+        console.warn("No suitable voice found for", langCode, "falling back to default.");
       }
       utterance.rate = 1.1;
       utterance.onend = function () {

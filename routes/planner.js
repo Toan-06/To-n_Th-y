@@ -1,4 +1,4 @@
-﻿const express = require('express');
+const express = require('express');
 const mongoose = require('mongoose');
 const router = express.Router();
 const { auth, JWT_SECRET } = require('./auth');
@@ -54,7 +54,7 @@ router.post('/generate', optionalAuth, async (req, res) => {
     // Pre-process: combine interests (chips) and additionalInfo (text)
     let combinedInterests = Array.isArray(interests) ? interests.join(', ') : (interests || '');
     if (additionalInfo) {
-        combinedInterests += (combinedInterests ? '. ' : '') + additionalInfo;
+      combinedInterests += (combinedInterests ? '. ' : '') + additionalInfo;
     }
     const interestsStr = combinedInterests;
     const interestsLower = interestsStr.toLowerCase();
@@ -125,14 +125,13 @@ LƯU Ý: Số ngày phải đúng ${numDays}. Mọi chi phí phải thực tế 
         {
           role: 'system',
           content: `Bạn là chuyên gia lập lịch du lịch thực địa tại Việt Nam. Nhiệm vụ: tạo lịch trình CHÍNH XÁC, THỰC TẾ theo đúng yêu cầu.
-QUY TẮC JSON BẮT BUỘC:
-- Trả về DUY NHẤT một đối tượng JSON hợp lệ.
-- TUYỆT ĐỐI không sử dụng dấu nháy đơn (') để bao quanh chuỗi. Phải dùng dấu nháy kép (").
-- Đảm bảo tất cả các chuỗi đều được đóng bằng dấu nháy kép đúng cách.
-- Nếu muốn dùng dấu nháy bên trong chuỗi, hãy sử dụng dấu thoát (\\").
+Quy tắc tuyệt đối:
 - "Săn mây / bình minh" → hoạt động lúc 04:30–06:30 SÁNG SỚM, KHÔNG được xếp chiều tối.
 - Số ngày trong itinerary PHẢI BẰNG số ngày được yêu cầu.
-- ĐỘ CHÍNH XÁC: Bạn PHẢI cung cấp địa chỉ (location) thực tế, chính xác tại Việt Nam. Không được bịa đặt tên quán hay địa chỉ sai lệch.`
+- Ngày 1 PHẢI tính thời gian di chuyển đến điểm đến.
+- ĐỘ CHÍNH XÁC: Bạn PHẢI cung cấp địa chỉ (location) thực tế, chính xác tại Việt Nam. Không được bịa đặt tên quán hay địa chỉ sai lệch.
+- CHẾ ĐỘ "KHÔNG QUAN TÂM HẠN MỨC": Nếu budget là "Không quan tâm hạn mức", hãy mặc định chọn những dịch vụ CAO CẤP nhất, quán ăn NỔI TIẾNG nhất và KHÔNG cần lo lắng về giá.
+- Chỉ trả về JSON hợp lệ.`
         },
         { role: 'user', content: prompt }
       ],
@@ -159,7 +158,7 @@ QUY TẮC JSON BẮT BUỘC:
         $or: [
           { customId: req.user.id },
           { id: req.user.id },
-          ...(mongoose.Types.ObjectId.isValid(req.user.id) ? [{ _id: req.user.id }] : [])
+          { _id: mongoose.Types.ObjectId.isValid(req.user.id) ? req.user.id : new mongoose.Types.ObjectId() }
         ]
       });
       if (userDoc) {
@@ -170,7 +169,7 @@ QUY TẮC JSON BẮT BUỘC:
 
     // DEBUG: Check data types before saving
     // console.log('🗓️ [Itinerary] Final Interests Context:', interestsStr);
-    
+
     // Lưu vào database, tự động gắn userId nếu đang đăng nhập
     const itinerary = new Itinerary({
       userId: userDoc ? userDoc._id : null,
@@ -196,7 +195,7 @@ QUY TẮC JSON BẮT BUỘC:
             $or: [
               { customId: req.user.id },
               { id: req.user.id },
-              ...(mongoose.Types.ObjectId.isValid(req.user.id) ? [{ _id: req.user.id }] : [])
+              { _id: mongoose.Types.ObjectId.isValid(req.user.id) ? req.user.id : new mongoose.Types.ObjectId() }
             ]
           });
           if (user) {
@@ -216,7 +215,7 @@ QUY TẮC JSON BẮT BUỘC:
               messages: [{ role: 'user', content: insightPrompt }],
               response_format: { type: 'json_object' }
             });
-            
+
             const insightsData = JSON.parse(insightRes.choices[0].message.content);
             if (insightsData && Array.isArray(insightsData.insights)) {
               const existingInsights = user.preferenceProfile.aiInsights || [];
@@ -378,7 +377,7 @@ router.post('/discover', async (req, res) => {
 router.post('/smart-wizard', optionalAuth, async (req, res) => {
   try {
     const { message, currentData, step, history } = req.body;
-    
+
     // Lấy context từ User profile (nếu có) để AI tự học
     let userContext = "";
     if (req.user) {
@@ -386,7 +385,7 @@ router.post('/smart-wizard', optionalAuth, async (req, res) => {
         $or: [
           { customId: req.user.id },
           { id: req.user.id },
-          ...(mongoose.Types.ObjectId.isValid(req.user.id) ? [{ _id: req.user.id }] : [])
+          { _id: mongoose.Types.ObjectId.isValid(req.user.id) ? req.user.id : new mongoose.Types.ObjectId() }
         ]
       }).select('preferenceProfile preferences');
       if (user && user.preferenceProfile) {
@@ -497,7 +496,7 @@ router.post('/save-manual', auth, async (req, res) => {
       $or: [
         { customId: req.user.id },
         { id: req.user.id },
-        ...(mongoose.Types.ObjectId.isValid(req.user.id) ? [{ _id: req.user.id }] : [])
+        { _id: mongoose.Types.ObjectId.isValid(req.user.id) ? req.user.id : new mongoose.Types.ObjectId() }
       ]
     });
     const userName = userDoc ? (userDoc.displayName || userDoc.name) : 'Thành viên';
@@ -556,22 +555,22 @@ router.get('/my-trips', auth, async (req, res) => {
 router.get('/recent-proposals', optionalAuth, async (req, res) => {
   try {
     const sessionKey = req.user ? req.user.id : (req.query.deviceId || 'anonymous_guest');
-    
+
     // Tìm các tin nhắn AI có chứa đề xuất (hasProposal: true)
     const Conversation = require('../models/Conversation');
-    const recentProposals = await Conversation.find({ 
-      userId: sessionKey, 
-      hasProposal: true 
+    const recentProposals = await Conversation.find({
+      userId: sessionKey,
+      hasProposal: true
     })
-    .sort({ timestamp: -1 })
-    .limit(5);
+      .sort({ timestamp: -1 })
+      .limit(5);
 
     const formatted = recentProposals.map(p => {
       // Trích xuất thông tin sơ bộ từ text [ITIN_PROPOSALS:...]
       const match = p.text.match(/\[ITIN_PROPOSALS:(.*?)\]/);
       let proposals = [];
       if (match) {
-        try { proposals = JSON.parse(match[1]); } catch(e) {}
+        try { proposals = JSON.parse(match[1]); } catch (e) { }
       }
       return {
         sessionId: p.sessionId,
@@ -595,7 +594,7 @@ router.get('/itinerary/:id', optionalAuth, async (req, res) => {
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ success: false, message: 'ID không hợp lệ.' });
     }
-    
+
     // Tìm bằng query thô để bỏ qua casting phức tạp của Mongoose trên connection khác
     const itin = await Itinerary.findOne({ _id: new mongoose.Types.ObjectId(id) }).lean();
 
@@ -675,7 +674,7 @@ router.delete('/permanent/:id', auth, async (req, res) => {
 router.post('/compare', async (req, res) => {
   try {
     const { place1, place2, budget, companion } = req.body;
-    
+
     if (!place1 || !place2) {
       return res.status(400).json({ success: false, message: 'Vui lòng cung cấp 2 địa điểm để so sánh.' });
     }
@@ -718,4 +717,3 @@ router.post('/compare', async (req, res) => {
 });
 
 module.exports = router;
-

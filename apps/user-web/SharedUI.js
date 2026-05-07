@@ -664,16 +664,6 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
       script1.src = 'chat-brain.js';
       document.body.appendChild(script1);
     }
-    if (!document.querySelector('script[src*="voice-helper.js"]')) {
-      const script2 = document.createElement('script');
-      script2.src = 'voice-helper.js';
-      script2.onload = () => {
-        if (window.WanderUI && window.WanderUI.setupVoiceIntegration) {
-          window.WanderUI.setupVoiceIntegration();
-        }
-      };
-      document.body.appendChild(script2);
-    }
 
     if (document.getElementById('global-chat-fab-wrap')) return;
     const div = document.createElement('div');
@@ -938,6 +928,19 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
       </div>
     `;
     while (div.firstChild) document.body.appendChild(div.firstChild);
+
+    // Load Voice Helper AFTER UI is in DOM to prevent "element not found" errors
+    if (!document.querySelector('script[src*="voice-helper.js"]')) {
+      const script2 = document.createElement('script');
+      script2.src = 'voice-helper.js';
+      script2.onload = () => {
+        console.log("🎙️ WanderUI: voice-helper.js loaded.");
+        if (window.WanderUI && window.WanderUI.setupVoiceIntegration) {
+          window.WanderUI.setupVoiceIntegration();
+        }
+      };
+      document.body.appendChild(script2);
+    }
 
     // Add global listener for close buttons
     document.addEventListener('click', (e) => {
@@ -1553,10 +1556,18 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
       const isOpen = !panel.hidden;
       panel.hidden = isOpen;
       fab.setAttribute('aria-expanded', !isOpen);
+
+      // --- Stop AI voice when panel is closed ---
+      if (isOpen && window.voiceGuide) {
+          window.voiceGuide.cancelAll();
+      }
     }
 
     fab.addEventListener('click', togglePanel);
-    closeBtn.addEventListener('click', togglePanel);
+    closeBtn.addEventListener('click', (e) => {
+        togglePanel();
+        if (window.voiceGuide) window.voiceGuide.cancelAll();
+    });
 
     // Also support external toggle buttons (like in header or hero)
     document.querySelectorAll('[data-chat-toggle]').forEach(btn => {
@@ -1588,12 +1599,24 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
 
             const micBtn = document.getElementById('companion-toggle');
             if (micBtn) {
+                // Single Click: Toggle or Interrupt
                 micBtn.onclick = (e) => {
                     e.preventDefault();
-                    if (window.voiceGuide.isListening) {
+                    if (window.voiceGuide.synth && window.voiceGuide.synth.speaking) {
+                        // AI is speaking: Stop it and start listening
+                        window.voiceGuide.forceInterrupt();
+                    } else if (window.voiceGuide.isListening) {
                         window.voiceGuide.stop();
                     } else {
                         window.voiceGuide.start();
+                    }
+                };
+                // Double Click: Stop Everything
+                micBtn.ondblclick = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (window.voiceGuide) {
+                        window.voiceGuide.cancelAll();
                     }
                 };
             }
@@ -1636,7 +1659,7 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
       { text: '📸 Điểm check-in', query: 'Những địa điểm chụp ảnh đẹp nhất' }
     ];
 
-    function appendMsg(text, role, isHtml) {
+    function appendMsg(text, role, isHtml, skipCache = false) {
       if (!text) return;
 
       let displayInfo = text;
@@ -1661,19 +1684,21 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
       log.scrollTop = log.scrollHeight;
 
       // Nếu có dữ liệu proposals, render các thẻ tương ứng
-      if (proposalsData) {
+      if (proposalsData && Array.isArray(proposalsData)) {
           renderProposalOptions(proposalsData);
       }
 
       // Cache to localStorage for instant load on next page
-      try {
-        if (!text.includes("Đang tải") && !text.includes("đang suy nghĩ")) {
-          let arr = JSON.parse(localStorage.getItem('wander_shared_chat') || '[]');
-          arr.push({ role, text });
-          if (arr.length > 50) arr = arr.slice(arr.length - 50);
-          localStorage.setItem('wander_shared_chat', JSON.stringify(arr));
-        }
-      } catch (e) { console.warn("Cache error", e); }
+      if (!skipCache) {
+        try {
+          if (!text.includes("Đang tải") && !text.includes("đang suy nghĩ")) {
+            let arr = JSON.parse(localStorage.getItem('wander_shared_chat') || '[]');
+            arr.push({ role, text });
+            if (arr.length > 50) arr = arr.slice(arr.length - 50);
+            localStorage.setItem('wander_shared_chat', JSON.stringify(arr));
+          }
+        } catch (e) { console.warn("Cache error", e); }
+      }
     }
 
     function loadSharedChat() {
@@ -1682,10 +1707,7 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
         const arr = JSON.parse(localStorage.getItem('wander_shared_chat') || '[]');
         if (arr.length > 0) {
           arr.forEach(m => {
-            const msg = document.createElement('div');
-            msg.className = 'chat-bubble chat-bubble--' + (m.role === 'user' ? 'user' : 'bot');
-            msg.textContent = m.text;
-            log.appendChild(msg);
+            appendMsg(m.text, m.role, false, true); // skipCache = true
           });
           log.scrollTop = log.scrollHeight;
         } else if (!currentSessionId) {
@@ -1717,7 +1739,7 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
           if (json.success && json.messages && json.messages.length > 0) {
             log.innerHTML = ''; // Only clear if we actually have server data to replace
             json.messages.forEach(m => {
-              appendMsg(m.text, m.role === 'user' ? 'user' : 'bot');
+              appendMsg(m.text, m.role === 'user' ? 'user' : 'bot', false, true); // skipCache = true
             });
             // Update cache with server truth
             localStorage.setItem('wander_shared_chat', JSON.stringify(json.messages.map(m => ({
@@ -1860,7 +1882,7 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
 
         log.removeChild(tempBubble);
 
-        if (resData.success) {
+        if (resData && resData.success) {
             const aiReply = resData.answer || resData.reply;
             appendMsg(aiReply, 'bot');
 
@@ -1886,11 +1908,14 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
                 renderDiscoveryCarousel(resData.discoveryPlaces);
             }
         } else {
-            appendMsg(resData.answer || 'Xin lỗi, trợ lý đang bận. Vui lòng thử lại!', 'bot');
+            console.warn("Chatbot: API returned failure or invalid data", resData);
+            const errMsg = (resData && typeof resData === 'string') ? resData : (resData?.answer || 'Trợ lý đang bận, thử lại sau nhé.');
+            appendMsg(errMsg, 'bot');
         }
       } catch (err) {
-        if (log.contains(tempBubble)) log.removeChild(tempBubble);
-        appendMsg('Lỗi kết nối. Vui lòng thử lại.', 'bot');
+        console.error("Chatbot Submit Error:", err);
+        if (log && log.contains(tempBubble)) log.removeChild(tempBubble);
+        appendMsg('Lỗi kết nối AI. Vui lòng kiểm tra internet hoặc tải lại trang.', 'bot');
       }
     });
 
@@ -2309,6 +2334,37 @@ window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
         langDropdown.classList.remove('is-active');
       });
     }
+
+    // Expose internal functions for voice-helper.js and chat-brain.js
+    window.WanderChat = {
+      appendMsg: appendMsg,
+      togglePanel: togglePanel,
+      renderProposalCard: renderProposalCard,
+      renderProposalOptions: renderProposalOptions,
+      renderItineraryCard: renderItineraryCard,
+      renderDiscoveryCarousel: renderDiscoveryCarousel,
+      sendMessage: async (text) => {
+        if (!text) return;
+        
+        // Trigger the form submission logic synthetically
+        const form = document.getElementById('global-chat-form');
+        const input = document.getElementById('global-chat-input');
+        if (input) input.value = text;
+        if (form) form.dispatchEvent(new Event('submit'));
+      }
+    };
+    // Compatibility alias for chat-brain.js
+    window.displayAIMessage = (data) => {
+      if (typeof data === 'string') {
+        appendMsg(data, 'bot');
+      } else if (data && data.answer) {
+        appendMsg(data.answer, 'bot');
+        if (data.proposal) renderProposalCard(data.proposal);
+        if (data.itineraryCard) renderItineraryCard(data.itineraryCard);
+        if (data.proposals) renderProposalOptions(data.proposals);
+        if (data.discoveryPlaces) renderDiscoveryCarousel(data.discoveryPlaces);
+      }
+    };
   }
 
 
