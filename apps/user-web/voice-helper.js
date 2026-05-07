@@ -250,9 +250,29 @@ var VoiceGuide = /*#__PURE__*/function () {
     key: "cleanupTranscript",
     value: function cleanupTranscript(text) {
       if (!text) return '';
+      
+      // Correction map for common Vietnamese misrecognitions
+      var corrections = {
+        'đ***': 'đần', // Handle profanity filter for harmless words
+        'dần': 'đần',  // Phonetic similarity
+        'đèn': 'đần',
+        'tìm đường': 'Chỉ đường',
+        'về nhà': 'Về trang chủ'
+      };
+
       var cleaned = text.trim();
-      // Xóa các dấu câu dư thừa ở cuối do browser tự thêm
-      cleaned = cleaned.replace(/[.?!]+$/, "");
+      
+      // Apply corrections
+      Object.keys(corrections).forEach(function(key) {
+        // Use a simpler regex without \b because asterisks often break word boundaries in many engines
+        var escapedKey = key.replace(/\*/g, '\\*');
+        var regex = new RegExp(escapedKey, 'gi');
+        cleaned = cleaned.replace(regex, corrections[key]);
+      });
+
+      // Remove trailing punctuation
+      cleaned = cleaned.replace(/[.?!,]+$/, "");
+      
       if (cleaned.length > 0) {
         cleaned = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
       }

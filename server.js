@@ -19,13 +19,6 @@ const PORT = 3000;
 const app = express();
 app.set('trust proxy', true);
 
-app.use((req, res, next) => {
-    // Ẩn các log định kỳ để tránh làm rối Terminal
-    if (!req.url.includes('unread-count')) {
-        console.log('>>> [RAW] Request:', req.method, req.url);
-    }
-    next();
-});
 
 app.use(compression()); // Bật nén dữ liệu
 app.use(cors({ origin: true, credentials: true }));

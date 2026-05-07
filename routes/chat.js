@@ -93,6 +93,7 @@ function generateResponseMetadata(message, aiAnswer, locationContext) {
 router.post('/', optionalAuth, async (req, res) => {
   try {
     const { message, coords, itinerary, activeTrip, deviceId, role, sessionId } = req.body;
+    let currentSessionId = sessionId;
 
     if (!message) {
       return res.status(400).json({ success: false, answer: 'Vui lòng nhập câu hỏi.' });
@@ -104,13 +105,13 @@ router.post('/', optionalAuth, async (req, res) => {
     // --- QUICK RESPONSE ---
     const targetLang = req.body.lang || 'auto';
     const lowerMsg = message.toLowerCase().trim().replace(/[?.,!]$/, "");
-    const quickGreetings = ['alo', 'chào', 'hi', 'hello', 'ơi', 'ê', 'hey', 'ê hả'];
+    const quickGreetings = ['alo', 'chào', 'hi', 'hello', 'ơi', 'ê', 'hey', 'ê hả', 'xin chào', 'hi soul', 'hello wander', 'annyeonghaseyo', 'bonjour', 'konnichiwa', 'ni hao'];
 
     if (quickGreetings.includes(lowerMsg)) {
       // Chỉ sử dụng Quick Response tiếng Việt nếu:
       // 1. targetLang là 'vi'
       // 2. targetLang là 'auto' VÀ từ khóa chào hỏi là thuần Việt
-      const isVietnameseIntent = (targetLang === 'vi') || (targetLang === 'auto' && ['alo', 'chào', 'ơi', 'ê', 'ê hả'].includes(lowerMsg));
+      const isVietnameseIntent = (targetLang === 'vi') || (targetLang === 'auto' && ['alo', 'chào', 'ơi', 'ê', 'ê hả', 'xin chào'].includes(lowerMsg));
 
       // Nếu là ngôn ngữ khác (en, jp, kr, fr), BẮT BUỘC bỏ qua Quick Response để AI tự trả lời đúng thứ tiếng
       if (isVietnameseIntent) {
@@ -138,7 +139,6 @@ router.post('/', optionalAuth, async (req, res) => {
 
     // 1. Phân tích Lịch sử hội thoại từ SERVER theo Session
     let chatHistory = [];
-    let currentSessionId = sessionId; // Dùng sessionId từ frontend nếu có
 
     if (chatbotDb.readyState === 1 && currentSessionId) {
       try {
@@ -183,10 +183,11 @@ router.post('/', optionalAuth, async (req, res) => {
       
       try {
         // A. Ưu tiên tìm trong bảng Knowledge (Kiến thức Admin soạn hoặc AI đã học)
+        // Dùng khớp chính xác (strict match) thay vì regex để tránh "trượt" kiến thức
         const knowledgeMatch = await Knowledge.findOne({
           $or: [
-            { question: { $regex: new RegExp(lowerMsg, 'i') } },
-            { question: { $regex: new RegExp(message.trim(), 'i') } }
+            { question: lowerMsg },
+            { question: message.trim() }
           ]
         });
 
@@ -256,7 +257,7 @@ router.post('/', optionalAuth, async (req, res) => {
         const isItinEarly = itinKwsEarly.some(k => lowerMsg.includes(k));
 
         if (!searchResult && !isContextSensitive && !isItinEarly && !isTimeSensitive && lowerMsg.length > 10) {
-          // Tìm câu trả lời gần nhất cho câu hỏi y hệt này
+          // Tìm câu trả lời gần nhất cho câu hỏi y hệt này, nhưng CHỈ lấy nếu câu trả lời đó được đánh giá TỐT (up) hoặc là từ AI uy tín
           const prevQuestion = await Conversation.findOne({
             role: 'user',
             text: { $regex: new RegExp(`^${message.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
@@ -265,7 +266,12 @@ router.post('/', optionalAuth, async (req, res) => {
           if (prevQuestion) {
             const prevAnswer = await Conversation.findOne({
               role: 'model',
-              timestamp: { $gt: prevQuestion.timestamp }
+              sessionId: prevQuestion.sessionId, // Phải cùng phiên để đảm bảo ngữ cảnh
+              timestamp: { $gt: prevQuestion.timestamp },
+              $or: [
+                { feedback: 'up' },
+                { isVerified: true } // Các câu trả lời được admin xác nhận
+              ]
             }).sort({ timestamp: 1 });
 
             if (prevAnswer && prevAnswer.text) {
