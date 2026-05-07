@@ -293,7 +293,7 @@ document.addEventListener('DOMContentLoaded', function() {
           '</div>' +
           '<div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">' +
             actionsHtml +
-            '<button class="view-detail-btn btn btn--outline btn--small" style="border-radius: 8px;" data-json=\'' + jsonStr.replace(/'/g, "&#39;") + '\'>Xem Lịch Trình</button>' +
+            '<button class="view-detail-btn btn btn--outline btn--small" style="border-radius: 8px;" data-id="' + it._id + '" data-json=\'' + jsonStr.replace(/'/g, "&#39;") + '\'>Xem Lịch Trình</button>' +
           '</div>' +
         '</div>';
       card.innerHTML = inner;
@@ -322,10 +322,11 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     document.querySelectorAll('.view-detail-btn').forEach(function (btn) {
       btn.addEventListener('click', function (e) {
+        var id = btn.getAttribute('data-id');
         var jsonText = btn.getAttribute('data-json');
         if (jsonText) {
           sessionStorage.setItem('wander_view_trip', jsonText);
-          window.location.href = 'planner.html?view=true';
+          window.location.href = 'planner.html?itinId=' + id + '&view=true';
         }
       });
     });
@@ -346,17 +347,53 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function loadTab(mode) {
     tripsList.innerHTML = '<p style="text-align: center; color: #64748b;">Đang tải...</p>';
-    Promise.all([fetchTrips(), fetchActivities()]).then(function(results) {
+    
+    // Use individual catches to ensure one failure doesn't block the whole page
+    var p1 = fetchTrips().catch(function(e) { 
+      console.warn("fetchTrips failed:", e); 
+      return { success: false, data: [] }; 
+    });
+    var p2 = fetchActivities().catch(function(e) { 
+      console.warn("fetchActivities failed:", e); 
+      return { success: false, activityLog: [] }; 
+    });
+
+    Promise.all([p1, p2]).then(function(results) {
       var tripsData = results[0];
       var actData = results[1];
       
-      var tripsArray = (tripsData && tripsData.success) ? tripsData.data : [];
-      var activityLog = (actData && actData.success) ? actData.activityLog : [];
-      var deleteHistory = (actData && actData.success) ? actData.deleteHistory : [];
+      var tripsArray = (tripsData && tripsData.success) ? (tripsData.data || []) : [];
+      var activityLog = (actData && actData.success) ? (actData.activityLog || []) : [];
+      var deleteHistory = (actData && actData.success) ? (actData.deleteHistory || []) : [];
       
+      try {
+        // Update Badge count defensively
+        var deletedIds = new Set();
+        if (Array.isArray(deleteHistory)) {
+          deleteHistory.forEach(function(d) {
+            if (d && (d.itemType === 'trip' || d.itemType === 'itinerary')) {
+              deletedIds.add(d.itemId);
+            }
+          });
+        }
+        
+        var activeCount = 0;
+        if (Array.isArray(tripsArray)) {
+          activeCount = tripsArray.filter(function(t) { 
+            return t && t._id && !deletedIds.has(t._id); 
+          }).length;
+        }
+        
+        var badgeEl = document.getElementById('badge-mytrips');
+        if (badgeEl) badgeEl.textContent = activeCount;
+      } catch (badgeErr) {
+        console.warn("Badge calculation error:", badgeErr);
+      }
+
       renderTripItems(tripsArray, activityLog, deleteHistory, mode);
     }).catch(function(err) {
-      tripsList.innerHTML = '<p style="color: red; text-align: center;">Lỗi tải dữ liệu.</p>';
+      console.error("Critical loadTab error:", err);
+      tripsList.innerHTML = '<p style="color: red; text-align: center;">Lỗi tải dữ liệu: ' + err.message + '</p>';
     });
   }
 

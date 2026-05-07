@@ -2,8 +2,9 @@
  * WanderViệt Shared UI Logic
  * Theme, Toast, Notifications, Rank Badges, Common Modals
  */
+window.WanderUI = window.WanderUI || {};
 
-window.WanderUI = Object.assign(window.WanderUI || {}, (function () {
+window.WanderUI = Object.assign(window.WanderUI, (function () {
   'use strict';
 
   const STORAGE_THEME = 'wander_theme';

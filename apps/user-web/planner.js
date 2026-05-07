@@ -1,6 +1,5 @@
 /* ===================== PLANNER.JS ===================== */
-// Moved loadDraft inside DOMContentLoaded to access local functions
-
+window.WanderPlanner = window.WanderPlanner || {};
 
 document.addEventListener('DOMContentLoaded', function () {
   const form = document.getElementById('aiPlannerForm');
@@ -781,4 +780,63 @@ document.addEventListener('DOMContentLoaded', function () {
       btnSaveTrip.textContent = "Lỗi lưu";
     }
   });
+
+  // --- VIEW SAVED TRIP LOGIC ---
+  const urlParams = new URLSearchParams(window.location.search);
+  const isViewMode = urlParams.get('view') === 'true';
+  const savedTripJson = sessionStorage.getItem('wander_view_trip');
+
+  if (isViewMode && (savedTripJson || urlParams.get('itinId'))) {
+    try {
+      const itinId = urlParams.get('itinId');
+      
+      const processPlan = (plan, destination, days) => {
+        // Hide initial state
+        if (placeholder) placeholder.style.display = 'none';
+        if (loader) loader.style.display = 'none';
+        
+        // Show result area
+        if (resultContainer) resultContainer.style.display = 'block';
+        if (refineBox) refineBox.style.display = 'block';
+        
+        // Show View Mode header if exists
+        const viewModeHeader = document.getElementById('viewModeHeader');
+        if (viewModeHeader) viewModeHeader.style.display = 'flex';
+
+        // Store in planHistory for switching/refining
+        planHistory = [plan];
+        currentPlanIndex = 0;
+        
+        // Render
+        renderItinerary(plan, destination || plan.destination || 'Chuyến đi đã lưu', days || plan.days || 3);
+        renderVersionTabs();
+
+        // Scroll to result
+        setTimeout(() => {
+          resultContainer.scrollIntoView({ behavior: 'smooth' });
+        }, 300);
+      };
+
+      if (savedTripJson) {
+        const plan = JSON.parse(savedTripJson);
+        processPlan(plan);
+      } else if (itinId) {
+        if (loader) loader.style.display = 'flex';
+        const token = localStorage.getItem('wander_token');
+        fetch(`/api/planner/itinerary/${itinId}`, {
+          headers: { 'x-auth-token': token || '' }
+        })
+          .then(r => r.json())
+          .then(json => {
+            if (json.success && json.data) {
+              processPlan(json.data.planJson, json.data.destination, json.data.days);
+            }
+          })
+          .catch(e => console.error("Error fetching saved itin:", e))
+          .finally(() => { if (loader) loader.style.display = 'none'; });
+      }
+    } catch (e) {
+      console.error("Lỗi hiển thị lịch trình đã lưu:", e);
+    }
+  }
 });

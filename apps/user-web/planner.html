@@ -381,11 +381,12 @@
     </div>
   </main>
 
-  <script src="SharedUI.js?v=1777335000010" defer></script>
+  <script src="SharedUI.js?v=1778162961775" defer></script>
   <script src="chat-brain.js"></script>
-  <script src="main.js?v=1777307000000" defer></script>
-  <script src="planner.js?v=1777335000010"></script>
+  <script src="main.js?v=1778162961775" defer></script>
+  <script src="planner.js?v=1778162961775"></script>
   <script>
+    document.addEventListener('DOMContentLoaded', function() {
     const REGION_DESTINATIONS = {
       'Miền Bắc': [
         { name: 'Hà Nội', img: 'https://images.unsplash.com/photo-1555944411-9a258e7a2b0a?w=200&h=150&fit=crop' },
@@ -936,6 +937,7 @@
          if (loader) loader.style.display = 'none';
        }
     };
+    });
   </script>
 </body>
 </html>

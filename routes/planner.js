@@ -172,7 +172,7 @@ Quy tắc tuyệt đối:
 
     // Lưu vào database, tự động gắn userId nếu đang đăng nhập
     const itinerary = new Itinerary({
-      userId: userDoc ? userDoc._id : null,
+      userId: req.user ? req.user.id : null,
       destination: String(destination || ""),
       days: Number(days),
       budget: String(budget || ""),
@@ -542,8 +542,13 @@ router.post('/save-manual', auth, async (req, res) => {
 // Lấy danh sách lịch trình của Tôi
 router.get('/my-trips', auth, async (req, res) => {
   try {
-    // Lấy tất cả lịch trình của user này
-    const trips = await Itinerary.find({ userId: req.user.id }).sort({ createdAt: -1 });
+    // Lấy tất cả lịch trình của user này (hỗ trợ cả ID chuẩn và ObjectId string)
+    const userSearchIds = [req.user.id];
+    if (req.user._id && req.user._id !== req.user.id) {
+      userSearchIds.push(req.user._id.toString());
+    }
+    
+    const trips = await Itinerary.find({ userId: { $in: userSearchIds } }).sort({ createdAt: -1 });
     res.json({ success: true, data: trips });
   } catch (error) {
     console.error('Planner DB Error:', error.message || error);
