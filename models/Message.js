@@ -11,6 +11,10 @@ const messageSchema = new mongoose.Schema({
     type: { type: String, enum: ['image', 'video'], default: 'image' }
   }],
   readBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  storyRef: {
+    id: mongoose.Schema.Types.ObjectId,
+    mediaUrl: String
+  },
   createdAt: { type: Date, default: Date.now }
 });
 

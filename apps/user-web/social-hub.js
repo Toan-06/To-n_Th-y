@@ -9,6 +9,14 @@ const SocialHub = {
     storyProgressInterval: null,
     isStoryMuted: false,
     socket: null,
+    map: null,
+    mapPickerInitialized: false,
+    postMediaFiles: [],
+    currentPostAttachment: null,
+    editingPostId: null,
+    sharingPostId: null,
+
+
 
     init: function () {
         console.log("📖 Social Hub v3 Initializing...");
@@ -173,9 +181,21 @@ const SocialHub = {
                 const emptyMsg = body.querySelector('.chat-empty, .chat-loading');
                 if (emptyMsg) emptyMsg.remove();
 
+                let storyRefHtml = '';
+                if (msg.storyRef && msg.storyRef.mediaUrl) {
+                    storyRefHtml = `
+                        <div class="chat-story-ref" onclick="SocialHub.openStoryViewerByRef('${msg.storyRef.id}')">
+                            <div class="story-ref-thumb" style="background-image: url('${msg.storyRef.mediaUrl}')">
+                                <div class="story-ref-play"><i class="fas fa-play-circle"></i></div>
+                            </div>
+                            <div class="story-ref-text">Xem thước phim</div>
+                        </div>
+                    `;
+                }
+
                 const msgDiv = document.createElement('div');
                 msgDiv.className = 'chat-msg received';
-                msgDiv.innerHTML = `<p>${msg.text}</p><span class="msg-time">Vừa xong</span>`;
+                msgDiv.innerHTML = `${storyRefHtml}<p>${msg.text}</p><span class="msg-time">Vừa xong</span>`;
                 body.appendChild(msgDiv);
                 body.scrollTop = body.scrollHeight;
 
@@ -408,12 +428,14 @@ const SocialHub = {
                 <div class="story-content" id="story-content"></div>
                 <div class="story-nav story-prev" onclick="SocialHub.prevStory()"></div>
                 <div class="story-nav story-next" onclick="SocialHub.nextStory()"></div>
-                <!-- Chỉ giữ input gửi tin nhắn, không có nút like/share thừa -->
                 <div class="story-bottom-bar">
                     <div class="story-reply-container">
                         <div class="story-reply-input">
-                            <input type="text" placeholder="Gửi tin nhắn..." id="story-reply-field">
-                            <button onclick="SocialHub.sendStoryReply()"><i class="fas fa-paper-plane"></i></button>
+                            <input type="text" placeholder="Viết bình luận..." id="story-comment-input" 
+                                onfocus="SocialHub.pauseStoryTimer()" 
+                                onblur="SocialHub.resumeStoryTimer()"
+                                onkeypress="if(event.key === 'Enter') SocialHub.submitStoryComment()">
+                            <button onclick="SocialHub.submitStoryComment()"><i class="fas fa-paper-plane"></i></button>
                         </div>
                         <div class="story-bottom-actions" id="story-viewer-bottom-actions">
                             <!-- Nút Like, Share... sẽ được render động -->
@@ -424,17 +446,58 @@ const SocialHub = {
         `;
         document.body.appendChild(overlay);
         document.body.style.overflow = 'hidden';
+
+        // Gắn sự kiện click vào thanh progress để "nhảy" story
+        setTimeout(() => {
+            document.querySelectorAll('.story-progress-bar').forEach(bar => {
+                bar.onclick = (e) => {
+                    const idx = parseInt(bar.dataset.index);
+                    this.currentStoryIndex = idx;
+                    this.showStory(idx);
+                    this.startStoryProgress();
+                };
+            });
+        }, 100);
+
         this.showStory(startIndex);
         this.startStoryProgress();
         this.markStoryAsViewed(userStories[startIndex]._id);
     },
 
+    openStoryViewerByRef: function (storyId) {
+        // Tìm user chứa story này
+        const story = this.stories.find(s => String(s._id) === String(storyId));
+        if (!story) {
+            if (window.WanderUI) WanderUI.showToast('Không tìm thấy thước phim này', 'error');
+            return;
+        }
+        const authorId = story.userId?._id || story.userId;
+        this.openStoryViewer(authorId, storyId);
+    },
+
     toggleStoryPause: function () {
-        this.storyPaused = !this.storyPaused;
+        if (this.storyPaused) this.resumeStoryTimer();
+        else this.pauseStoryTimer();
+    },
+
+    pauseStoryTimer: function () {
+        this.storyPaused = true;
         const btn = document.getElementById('story-pause-btn');
-        if (btn) btn.innerHTML = this.storyPaused ? '<i class="fas fa-play"></i>' : '<i class="fas fa-pause"></i>';
+        if (btn) btn.innerHTML = '<i class="fas fa-play"></i>';
         const video = document.querySelector('#story-content video');
-        if (video) this.storyPaused ? video.pause() : video.play();
+        const audio = document.querySelector('#story-content audio');
+        if (video) video.pause();
+        if (audio) audio.pause();
+    },
+
+    resumeStoryTimer: function () {
+        this.storyPaused = false;
+        const btn = document.getElementById('story-pause-btn');
+        if (btn) btn.innerHTML = '<i class="fas fa-pause"></i>';
+        const video = document.querySelector('#story-content video');
+        const audio = document.querySelector('#story-content audio');
+        if (video) video.play().catch(() => {});
+        if (audio) audio.play().catch(() => {});
     },
 
     toggleStoryMute: function () {
@@ -443,6 +506,11 @@ const SocialHub = {
         const video = document.getElementById('story-video-player');
         if (video) {
             video.muted = this.isStoryMuted;
+        }
+
+        const audio = document.getElementById('story-audio-player');
+        if (audio) {
+            audio.muted = this.isStoryMuted;
         }
 
         if (this._storyMusicAudio) {
@@ -463,8 +531,70 @@ const SocialHub = {
         }
     },
 
-    shareStory: function () {
-        if (window.WanderUI) WanderUI.showToast('Đã sao chép liên kết thước phim!', 'success');
+    shareStory: function (storyId) {
+        this.pauseStoryTimer();
+        const url = window.location.origin + '/social-hub.html?storyId=' + storyId;
+        navigator.clipboard.writeText(url).then(() => {
+            if (window.WanderUI) WanderUI.showToast('Đã sao chép liên kết thước phim!', 'success');
+        });
+    },
+
+    toggleLikeStory: async function (storyId, btn) {
+        try {
+            const res = await fetch(`/api/social/stories/${storyId}/like`, {
+                method: 'POST',
+                headers: { 'x-auth-token': localStorage.getItem('wander_token') }
+            });
+            const data = await res.json();
+            if (data.success) {
+                const liked = data.isLiked;
+                btn.classList.toggle('liked', liked);
+                const icon = btn.querySelector('i');
+                icon.className = liked ? 'fas fa-heart' : 'far fa-heart';
+                const countSpan = btn.querySelector('.action-count');
+                if (countSpan) countSpan.textContent = data.likeCount;
+                
+                // Update local list
+                if (!this._likedStories) this._likedStories = [];
+                if (liked) {
+                    if (!this._likedStories.includes(storyId)) this._likedStories.push(storyId);
+                } else {
+                    this._likedStories = this._likedStories.filter(id => id !== storyId);
+                }
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    },
+
+    submitStoryComment: async function () {
+        const input = document.getElementById('story-comment-input');
+        const content = input.value.trim();
+        if (!content) return;
+
+        const story = this.viewedStoriesList[this.currentStoryIndex];
+        if (!story) return;
+
+        try {
+            const res = await fetch(`/api/social/reply-to-story/${story._id}`, {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'x-auth-token': localStorage.getItem('wander_token') 
+                },
+                body: JSON.stringify({ content })
+            });
+            const data = await res.json();
+            if (data.success) {
+                input.value = '';
+                if (window.WanderUI) WanderUI.showToast('Đã gửi phản hồi!', 'success');
+            } else {
+                if (window.WanderUI) WanderUI.showToast(data.message || 'Lỗi gửi phản hồi', 'error');
+            }
+        } catch (e) {
+            console.error(e);
+            if (window.WanderUI) WanderUI.showToast('Không thể kết nối máy chủ', 'error');
+        }
     },
 
     showStory: function (index) {
@@ -474,17 +604,35 @@ const SocialHub = {
         const content = document.getElementById('story-content');
         const media = story.media?.[0];
 
+        // Prepare styles for media
+        const objectFit = story.objectFit || 'contain';
+        const mediaStyle = `
+            filter: ${story.filter || 'none'};
+            transform: ${story.flipped ? 'scaleX(-1)' : 'none'};
+            object-fit: ${objectFit};
+            width: 100%;
+            height: 100%;
+        `;
+
         let mediaHtml = '';
         if (media?.type === 'video') {
             // Video: try to autoplay, with an ID so we can force play it
-            mediaHtml = `<video src="${media.url}" id="story-video-player" autoplay loop playsinline class="story-media" onclick="SocialHub.toggleStoryPause()"></video>`;
+            mediaHtml = `<video src="${media.url}" id="story-video-player" autoplay loop playsinline class="story-media" style="${mediaStyle}" onclick="SocialHub.toggleStoryPause()"></video>`;
+        } else if (media?.type === 'audio') {
+            mediaHtml = `
+                <div class="story-audio-wrapper" style="${mediaStyle}">
+                    <div class="audio-wave active"><span></span><span></span><span></span><span></span><span></span></div>
+                    <i class="fas fa-music"></i>
+                    <audio src="${media.url}" id="story-audio-player" autoplay loop></audio>
+                </div>
+            `;
         } else if (media?.url) {
             // Ảnh thật từ upload
-            mediaHtml = `<img src="${media.url}" class="story-media" alt="story">`;
+            mediaHtml = `<img src="${media.url}" class="story-media" style="${mediaStyle}" alt="story">`;
         } else {
             // Fallback: avatar người dùng
             const av = story.user?.avatar || story.userId?.avatar || 'assets/default-avatar.svg';
-            mediaHtml = `<img src="${av}" class="story-media" alt="story">`;
+            mediaHtml = `<img src="${av}" class="story-media" style="${mediaStyle}" alt="story">`;
         }
 
         // Text overlay
@@ -499,6 +647,15 @@ const SocialHub = {
             }
         }
 
+        // Nhãn dán (Stickers)
+        let stickersHtml = '';
+        if (story.stickers && Array.isArray(story.stickers)) {
+            story.stickers.forEach(st => {
+                stickersHtml += `<div class="story-viewer-sticker" style="top:${st.top};left:${st.left};font-size:${st.fontSize || '3rem'};">${st.content}</div>`;
+            });
+        }
+        mediaHtml += `<div class="story-stickers-overlay">${stickersHtml}</div>`;
+
         // Cập nhật các nút ở thanh dưới (bottom actions)
         const bottomActions = document.getElementById('story-viewer-bottom-actions');
         if (bottomActions) {
@@ -507,9 +664,6 @@ const SocialHub = {
                 <button class="sv-btn ${liked ? 'liked' : ''}" id="story-like-btn" onclick="SocialHub.toggleLikeStory('${story._id}', this)">
                     <i class="${liked ? 'fas' : 'far'} fa-heart"></i>
                     <span class="action-count">${story.likeCount || 0}</span>
-                </button>
-                <button class="sv-btn" onclick="SocialHub.openStoryComment()">
-                    <i class="fas fa-comment-dots"></i>
                 </button>
                 <button class="sv-btn" onclick="SocialHub.shareStory('${story._id}')">
                     <i class="fas fa-share"></i>
@@ -538,6 +692,12 @@ const SocialHub = {
                 this._storyMusicAudio.muted = this.isStoryMuted;
                 this._storyMusicAudio.play().catch(() => { });
             }
+        } else if (media?.type === 'video' || media?.type === 'audio') {
+            if (musicInfoEl) {
+                musicInfoEl.style.display = 'flex';
+                musicInfoEl.innerHTML = `<i class="fas fa-volume-up"></i><span>Âm thanh gốc</span>`;
+            }
+            if (this._storyMusicAudio) { this._storyMusicAudio.pause(); this._storyMusicAudio = null; }
         } else {
             if (musicInfoEl) musicInfoEl.style.display = 'none';
             if (this._storyMusicAudio) { this._storyMusicAudio.pause(); this._storyMusicAudio = null; }
@@ -545,11 +705,27 @@ const SocialHub = {
 
         content.innerHTML = mediaHtml;
 
+        // Nếu là ảnh và có duration tùy chỉnh, cập nhật timeline
+        if (!media?.type || media.type === 'image') {
+            if (story.duration) {
+                this.startStoryProgress(story.duration);
+            }
+        }
+
         // Force play video if present (fixes "không chạy" issue)
         const videoEl = document.getElementById('story-video-player');
+        const audioEl = document.getElementById('story-audio-player');
+
+        const handleMetadata = (el) => {
+            const duration = el.duration * 1000;
+            if (duration && duration > 0) {
+                this.startStoryProgress(duration);
+            }
+        };
+
         if (videoEl) {
             videoEl.muted = this.isStoryMuted;
-
+            videoEl.onloadedmetadata = () => handleMetadata(videoEl);
             videoEl.play().catch(e => {
                 console.warn('Video autoplay blocked, attempting muted autoplay...', e);
                 this.isStoryMuted = true; // Auto update global state if blocked
@@ -559,6 +735,11 @@ const SocialHub = {
 
                 videoEl.play().catch(err => console.error('Video totally blocked', err));
             });
+        }
+        if (audioEl) {
+            audioEl.muted = this.isStoryMuted;
+            audioEl.onloadedmetadata = () => handleMetadata(audioEl);
+            audioEl.play().catch(() => { });
         }
 
         // Cập nhật progress bars
@@ -582,12 +763,12 @@ const SocialHub = {
         event.currentTarget.querySelector('i').style.color = '#ff3b30';
     },
 
-    startStoryProgress: function () {
+    startStoryProgress: function (customDuration = null) {
         if (this.storyProgressInterval) clearInterval(this.storyProgressInterval);
         this.storyPaused = false;
 
         let progress = 0;
-        const duration = 5000; // 5 seconds per story
+        const duration = customDuration || 5000; // 5 seconds default or custom
         const interval = 50; // Update every 50ms
         const step = 100 / (duration / interval);
 
@@ -596,7 +777,10 @@ const SocialHub = {
             progress += step;
             const activeBar = document.querySelector('.story-progress-bar.active .progress-fill');
             if (activeBar) activeBar.style.width = `${Math.min(progress, 100)}%`;
-            if (progress >= 100) this.nextStory();
+            if (progress >= 100) {
+                clearInterval(this.storyProgressInterval);
+                this.nextStory();
+            }
         }, interval);
     },
 
@@ -783,9 +967,15 @@ const SocialHub = {
                         </div>
                         <img id="story-preview-img" class="editor-media" style="display:none;">
                         <video id="story-preview-video" class="editor-media" style="display:none;" autoplay loop muted></video>
+                        <div id="story-preview-audio" class="editor-media-audio" style="display:none;">
+                            <div class="audio-wave"><span></span><span></span><span></span><span></span></div>
+                            <i class="fas fa-volume-up"></i>
+                            <span id="story-preview-audio-name">Âm thanh đang chọn</span>
+                        </div>
                         <div id="story-text-overlay-preview" class="story-text-overlay-preview" style="display:none;"></div>
                         <div id="story-music-overlay-preview" class="story-music-overlay-preview" style="display:none;">
                             <i class="fas fa-music"></i> <marquee id="music-preview-name" scrollamount="4"></marquee>
+                            <button class="remove-music-btn" onclick="SocialHub.removeSelectedMusic(event)">×</button>
                         </div>
                     </div>
                     
@@ -794,10 +984,12 @@ const SocialHub = {
                         <button class="tool-btn" onclick="SocialHub.openTextEditor()"><i class="fas fa-font"></i><span>Văn bản</span></button>
                         <button class="tool-btn" onclick="SocialHub.openStickerPicker()"><i class="fas fa-smile"></i><span>Nhãn dán</span></button>
                         <button class="tool-btn" onclick="SocialHub.openFilterPanel()"><i class="fas fa-magic"></i><span>Bộ lọc</span></button>
+                        <button class="tool-btn" onclick="SocialHub.toggleStoryFit()"><i class="fas fa-expand"></i><span>Khung hình</span></button>
+                        <button class="tool-btn" onclick="SocialHub.openDurationPanel()"><i class="fas fa-clock"></i><span>Thời lượng</span></button>
                         <button class="tool-btn" onclick="SocialHub.flipMedia()"><i class="fas fa-arrows-alt-h"></i><span>Lật</span></button>
                     </div>
                 </div>
-                <input type="file" id="story-file-input" accept="image/*,video/*" hidden onchange="SocialHub.handleStoryUpload(this)">
+                <input type="file" id="story-file-input" accept="image/*,video/*,audio/*" hidden onchange="SocialHub.handleStoryUpload(this)">
             </div>
             
             <!-- Music Selector Modal -->
@@ -842,7 +1034,10 @@ const SocialHub = {
                             <label style="color:#aaa;font-size:.85rem">Cỡ chữ</label>
                             <input type="range" min="16" max="64" value="28" id="story-text-size" oninput="SocialHub.setTextOverlaySize(this.value)">
                         </div>
-                        <button class="btn btn--primary" onclick="SocialHub.applyTextOverlay()">Áp dụng</button>
+                        <div class="text-editor-actions">
+                            <button class="btn btn--outline" onclick="SocialHub.clearTextOverlay()">Xóa chữ</button>
+                            <button class="btn btn--primary" onclick="SocialHub.applyTextOverlay()">Áp dụng</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -869,12 +1064,29 @@ const SocialHub = {
                     </div>
                 </div>
             </div>
+
+            <!-- Duration Panel -->
+            <div id="duration-panel-modal" class="sub-modal" style="display:none;">
+                <div class="sub-modal-content">
+                    <div class="sub-modal-header"><h4>Thời lượng hiển thị</h4><button onclick="document.getElementById('duration-panel-modal').style.display='none'">×</button></div>
+                    <div class="duration-body">
+                        <div class="duration-display"><span id="duration-val">5</span> giây</div>
+                        <input type="range" min="3" max="15" value="5" id="story-duration-range" oninput="SocialHub.setStoryDuration(this.value)">
+                        <p style="font-size:0.75rem;color:#888;margin-top:10px;">Lưu ý: Đối với Video/Audio, thời lượng sẽ tự động khớp với tệp gốc.</p>
+                        <button class="btn btn--primary" style="margin-top:20px;width:100%" onclick="document.getElementById('duration-panel-modal').style.display='none'">Xong</button>
+                    </div>
+                </div>
+            </div>
         `;
         document.body.appendChild(modal);
         this.storySelectedMusic = null;
         this.storyTextContent = '';
         this.storyTextColor = '#ffffff';
         this.storyTextPos = { top: '50%', left: '50%' };
+        this.storyDuration = 5000;
+        this.storyFilter = '';
+        this.storyFlipped = false;
+        this.storyFit = 'contain';
         this.initTextDrag();
     },
 
@@ -981,11 +1193,42 @@ const SocialHub = {
 
         container.appendChild(sticker);
         document.getElementById('sticker-picker-modal').style.display = 'none';
-        if (window.WanderUI) WanderUI.showToast(`Đã thêm nhãn dán ${emoji}`, 'success');
+        if (window.WanderUI) WanderUI.showToast(`Đã thêm nhãn dán! Nhấn đúp để xóa.`, 'info');
+        
+        // Double click to remove
+        sticker.addEventListener('dblclick', () => {
+            sticker.remove();
+            if (window.WanderUI) WanderUI.showToast('Đã xóa nhãn dán', 'success');
+        });
     },
 
     openFilterPanel: function () {
         document.getElementById('filter-panel-modal').style.display = 'flex';
+    },
+
+    openDurationPanel: function () {
+        document.getElementById('duration-panel-modal').style.display = 'flex';
+    },
+
+    setStoryDuration: function (seconds) {
+        this.storyDuration = seconds * 1000;
+        const display = document.getElementById('duration-val');
+        if (display) display.textContent = seconds;
+    },
+
+    removeSelectedMusic: function (e) {
+        if (e) e.stopPropagation();
+        this.storySelectedMusic = null;
+        document.getElementById('story-music-overlay-preview').style.display = 'none';
+        if (window.WanderUI) WanderUI.showToast('Đã gỡ nhạc', 'info');
+    },
+
+    clearTextOverlay: function () {
+        this.storyTextContent = '';
+        document.getElementById('story-text-input').value = '';
+        const textPreview = document.getElementById('story-text-overlay-preview');
+        if (textPreview) textPreview.style.display = 'none';
+        document.getElementById('text-editor-modal').style.display = 'none';
     },
 
     applyFilter: function (filterVal) {
@@ -1005,6 +1248,15 @@ const SocialHub = {
         const val = this.storyFlipped ? 'scaleX(-1)' : 'scaleX(1)';
         if (img) img.style.transform = val;
         if (vid) vid.style.transform = val;
+    },
+
+    toggleStoryFit: function () {
+        this.storyFit = (this.storyFit === 'contain') ? 'cover' : 'contain';
+        const img = document.getElementById('story-preview-img');
+        const vid = document.getElementById('story-preview-video');
+        if (img) img.style.objectFit = this.storyFit;
+        if (vid) vid.style.objectFit = this.storyFit;
+        if (window.WanderUI) WanderUI.showToast(`Chế độ: ${this.storyFit === 'cover' ? 'Toàn màn hình' : 'Vừa khung hình'}`, 'info');
     },
 
 
@@ -1141,10 +1393,18 @@ const SocialHub = {
 
         if (file.type.startsWith('video/')) {
             img.style.display = 'none';
+            document.getElementById('story-preview-audio').style.display = 'none';
             video.style.display = 'block';
             video.src = URL.createObjectURL(file);
+        } else if (file.type.startsWith('audio/')) {
+            img.style.display = 'none';
+            video.style.display = 'none';
+            const audioPreview = document.getElementById('story-preview-audio');
+            audioPreview.style.display = 'flex';
+            document.getElementById('story-preview-audio-name').textContent = file.name;
         } else {
             video.style.display = 'none';
+            document.getElementById('story-preview-audio').style.display = 'none';
             img.style.display = 'block';
             img.src = URL.createObjectURL(file);
         }
@@ -1174,6 +1434,37 @@ const SocialHub = {
             formData.append('textColor', this.storyTextColor || '#ffffff');
             formData.append('textTop', this.storyTextPos?.top || '50%');
             formData.append('textLeft', this.storyTextPos?.left || '50%');
+        }
+        if (this.storyDuration) {
+            formData.append('duration', this.storyDuration);
+        }
+        if (this.storyFilter) {
+            formData.append('filter', this.storyFilter);
+        }
+        if (this.storyFlipped) {
+            formData.append('flipped', true);
+        }
+        if (this.storyFit) {
+            formData.append('objectFit', this.storyFit);
+        }
+
+        // Thu thập nhãn dán (stickers)
+        const stickers = [];
+        const container = document.getElementById('editor-preview-container');
+        if (container) {
+            container.querySelectorAll('.editor-sticker').forEach(st => {
+                const rect = st.getBoundingClientRect();
+                const crect = container.getBoundingClientRect();
+                stickers.push({
+                    content: st.textContent,
+                    top: ((rect.top + rect.height / 2 - crect.top) / crect.height * 100).toFixed(2) + '%',
+                    left: ((rect.left + rect.width / 2 - crect.left) / crect.width * 100).toFixed(2) + '%',
+                    fontSize: st.style.fontSize || '3rem'
+                });
+            });
+        }
+        if (stickers.length > 0) {
+            formData.append('stickers', JSON.stringify(stickers));
         }
 
         try {
@@ -1210,6 +1501,8 @@ const SocialHub = {
                 this.storyTextPos = { top: '50%', left: '50%' };
                 this.storyFilter = '';
                 this.storyFlipped = false;
+                this.storyDuration = 5000;
+                this.storyFit = 'contain';
 
                 if (window.WanderUI) WanderUI.showToast('Đã đăng thước phim! 🎉', 'success');
             } else {
@@ -1294,23 +1587,48 @@ const SocialHub = {
                             <span class="post-time">${this.formatTime(post.createdAt)}${post.location?.name ? ' · 📍' + post.location.name : ''}</span>
                         </div>
                     </div>
-                    ${isOwner ? `
                         <div class="post-menu-dropdown">
-                            <button class="btn-icon post-menu-btn" onclick="SocialHub.togglePostMenu('${post._id}')"><i class="fas fa-ellipsis-h"></i></button>
+                            <button class="btn-icon post-menu-btn" onclick="SocialHub.togglePostMenu('${post._id}', event)"><i class="fas fa-ellipsis-h"></i></button>
                             <div class="post-menu" id="post-menu-${post._id}" style="display:none">
-                                <button onclick="SocialHub.editPost('${post._id}')"><i class="fas fa-edit"></i> Chỉnh sửa</button>
-                                <button onclick="SocialHub.deletePost('${post._id}')" class="text-danger"><i class="fas fa-trash-alt"></i> Xóa</button>
+                                ${isOwner ? `
+                                    <button onclick="SocialHub.editPost('${post._id}')"><i class="fas fa-edit"></i> Chỉnh sửa bài viết</button>
+                                    <button onclick="SocialHub.deletePost('${post._id}')" class="text-danger"><i class="fas fa-trash-alt"></i> Xóa bài viết</button>
+                                    <div class="menu-divider"></div>
+                                ` : ''}
+                                <button onclick="SocialHub.copyPostLink('${post._id}')"><i class="fas fa-link"></i> Sao chép liên kết</button>
+                                <button onclick="SocialHub.sharePost('${post._id}')"><i class="fas fa-share"></i> Chia sẻ lên tường</button>
+                                ${!isOwner ? `
+                                    <button onclick="SocialHub.hidePost('${post._id}')"><i class="fas fa-eye-slash"></i> Ẩn bài viết này</button>
+                                    <button onclick="SocialHub.reportPost('${post._id}')" class="text-danger"><i class="fas fa-flag"></i> Báo cáo vi phạm</button>
+                                ` : ''}
                             </div>
                         </div>
-                    ` : ''}
                 </div>
                 <div class="post-content">${this.linkifyContent(post.content)}</div>
                 ${post.media && post.media.length > 0 ? `
-                    <div class="post-media ${post.media.length > 1 ? 'media-grid' : ''}">
-                        ${post.media.map((m, i) => m.type === 'image'
-            ? `<img src="${m.url}" alt="Ảnh bài viết" onclick="SocialHub.viewImage('${m.url}')" onerror="this.style.display='none'">`
-            : `<video src="${m.url}" controls></video>`
-        ).join('')}
+                    <div class="post-media ${post.mediaLayout ? 'media-layout-' + post.mediaLayout : (post.media.length > 1 ? 'media-grid' : '')}">
+                        ${post.media.map((m, i) => {
+                            if (m.type === 'image') return `<img src="${m.url}" alt="Ảnh bài viết" onclick="SocialHub.viewImage('${m.url}')" onerror="this.style.display='none'">`;
+                            if (m.type === 'video') return `<video src="${m.url}" controls></video>`;
+                            if (m.type === 'audio') return `
+                                <div class="post-audio-card">
+                                    <div class="audio-wave"><span></span><span></span><span></span><span></span></div>
+                                    <audio src="${m.url}" controls></audio>
+                                </div>
+                            `;
+                            return '';
+                        }).join('')}
+                    </div>
+                ` : ''}
+                
+                ${post.attachment && post.attachment.type !== 'none' ? `
+                    <div class="post-attachment-card" onclick="window.location.href='${post.attachment.link}'" style="cursor: pointer; margin-top: 0.75rem; padding: 1rem; border-radius: 12px; background: rgba(255,255,255,0.05); display: flex; align-items: center; gap: 1rem; border: 1px solid rgba(255,255,255,0.1); transition: all 0.2s;">
+                        <span style="font-size: 2rem;">${post.attachment.type === 'itinerary' ? '🎒' : '📍'}</span>
+                        <div style="flex: 1;">
+                            <h4 style="margin: 0; font-size: 1.1rem; color: #fff;">${post.attachment.title}</h4>
+                            <p style="margin: 0; font-size: 0.85rem; color: var(--text-muted);">${post.attachment.subtitle}</p>
+                        </div>
+                        <i class="fas fa-chevron-right" style="color: var(--text-muted);"></i>
                     </div>
                 ` : ''}
                 
@@ -1519,17 +1837,66 @@ const SocialHub = {
         `;
     },
 
-    togglePostMenu: function (postId) {
+    togglePostMenu: function (postId, event) {
+        if (event) event.stopPropagation();
         const menu = document.getElementById(`post-menu-${postId}`);
         if (menu) {
+            // Close all other menus first
+            document.querySelectorAll('.post-menu').forEach(m => {
+                if (m.id !== `post-menu-${postId}`) m.style.display = 'none';
+            });
             menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
         }
     },
 
     editPost: function (postId) {
-        // TODO: Implement edit functionality
-        if (window.WanderUI) WanderUI.showToast('Tính năng chỉnh sửa đang phát triển', 'info');
+        const post = this.posts.find(p => p._id === postId);
+        if (!post) return;
+
+        // Close menu
+        const menu = document.getElementById(`post-menu-${postId}`);
+        if (menu) menu.style.display = 'none';
+
+        this.editingPostId = postId;
+        
+        // Open modal
+        document.getElementById('post-modal')?.removeAttribute('hidden');
+        document.querySelector('.modal__title').textContent = 'Chỉnh sửa bài viết';
+        document.getElementById('submit-post').textContent = 'Cập nhật';
+
+        // Populate content
+        const contentInput = document.getElementById('post-content');
+        if (contentInput) contentInput.value = post.content || '';
+
+        // Populate location
+        if (post.location?.name) {
+            const tagBtn = document.getElementById('tag-location');
+            if (tagBtn) {
+                tagBtn.querySelector('span').textContent = post.location.name.substring(0, 30) + (post.location.name.length > 30 ? '...' : '');
+                tagBtn.dataset.location = post.location.name;
+                tagBtn.classList.add('active');
+            }
+        }
+
+        // Populate attachment
+        if (post.attachment && post.attachment.type !== 'none') {
+            this.selectAttachment(
+                post.attachment.refId || post.attachment.id,
+                post.attachment.title,
+                post.attachment.type,
+                post.attachment.subtitle
+            );
+        }
+
+        // Populate privacy
+        const vis = post.isPublic ? 'public' : 'friends';
+        const opt = document.querySelector(`.dropdown-option[data-value="${vis}"]`);
+        if (opt) opt.click();
+
+        // Close menu
+        this.togglePostMenu(postId);
     },
+
 
     linkifyContent: function (text) {
         if (!text) return '';
@@ -1565,42 +1932,144 @@ const SocialHub = {
         // Submit post
         document.getElementById('submit-post')?.addEventListener('click', () => this.submitPost());
 
-        // Tag location
-        document.getElementById('tag-location')?.addEventListener('click', () => {
-            const name = prompt("Nhập tên địa điểm:");
-            if (name) {
-                document.getElementById('tag-location').innerHTML = `📍 ${name}`;
-                document.getElementById('tag-location').dataset.location = name;
-                document.getElementById('tag-location').classList.add('active');
-            }
-        });
-        // Upload media
-        document.getElementById('media-upload')?.addEventListener('change', (e) => {
-            const preview = document.getElementById('media-preview');
-            if (!preview) return;
-            preview.innerHTML = '';
-            Array.from(e.target.files).forEach(f => {
-                const url = URL.createObjectURL(f);
-                preview.innerHTML += f.type.startsWith('image') ? `<img src="${url}" class="preview-thumb">` : `<video src="${url}" class="preview-thumb" controls></video>`;
-            });
-        });
-        // Global Search
-        const searchInput = document.getElementById('user-search-input');
-        if (searchInput) {
-            searchInput.addEventListener('input', (e) => this.performGlobalSearch(e.target.value));
-            searchInput.addEventListener('focus', () => this.showSearchSuggestions());
-            searchInput.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') {
-                    this.openFullSearch(e.target.value);
-                }
-            });
-            document.addEventListener('click', (e) => {
-                if (!e.target.closest('.search-card')) {
-                    const results = document.getElementById('search-results');
-                    if (results) results.style.display = 'none';
-                }
+        // Attach Trip/Destination (Old) - Removed in favor of inline toggle
+        /*
+        const attachBtn = document.getElementById('attach-trip');
+        const attachModal = document.getElementById('attach-trip-modal');
+        const closeAttachModal = document.getElementById('close-attach-modal');
+        
+        if (attachBtn) {
+            attachBtn.addEventListener('click', () => this.openAttachModal());
+        }
+        if (closeAttachModal) {
+            closeAttachModal.addEventListener('click', () => {
+                if (attachModal) attachModal.style.display = 'none';
             });
         }
+        
+        const removeAttachBtn = document.getElementById('remove-attachment');
+        if (removeAttachBtn) {
+            removeAttachBtn.addEventListener('click', () => {
+                this.currentPostAttachment = null;
+                document.getElementById('attachment-preview-container').style.display = 'none';
+            });
+        }
+        */
+
+        // Audience Dropdown logic (Old) - Removed in favor of privacy-trigger
+        /*
+        const audOptions = document.querySelectorAll('#audience-dropdown .dropdown-option');
+        const audSelected = document.getElementById('audience-selected');
+        audOptions.forEach(opt => {
+            opt.addEventListener('click', (e) => {
+                e.stopPropagation();
+                audOptions.forEach(o => o.classList.remove('active'));
+                opt.classList.add('active');
+                if (audSelected) {
+                    audSelected.dataset.value = opt.dataset.value;
+                    audSelected.innerHTML = opt.innerHTML + ' <i class="fas fa-chevron-down" style="font-size: 0.7em; margin-left: 4px;"></i>';
+                }
+                document.getElementById('audience-dropdown')?.blur();
+            });
+        });
+        */
+
+        // Tag location (Old) - Removed in favor of toggleInlineFeature
+        /*
+        document.getElementById('tag-location')?.addEventListener('click', () => {
+            const locContainer = document.getElementById('location-input-container');
+            if (locContainer) {
+                locContainer.style.display = 'flex';
+                document.getElementById('post-location-input')?.focus();
+            }
+        });
+        */
+
+        // Privacy Dropdown (New)
+        document.getElementById('privacy-trigger')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const opts = document.getElementById('privacy-options');
+            if (opts) opts.style.display = opts.style.display === 'none' ? 'block' : 'none';
+        });
+
+        // Use more specific selector to avoid conflicts
+        document.querySelectorAll('#privacy-options .dropdown-option').forEach(opt => {
+            opt.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const val = opt.dataset.value;
+                const labelText = opt.childNodes[opt.childNodes.length - 1].textContent.trim();
+                const selected = document.getElementById('audience-selected');
+                const trigger = document.getElementById('privacy-trigger');
+                
+                if (selected && trigger) {
+                    selected.textContent = labelText;
+                    selected.dataset.value = val;
+                    // Update trigger icon
+                    const oldIcon = trigger.querySelector('i.fas:not(.fa-chevron-down)');
+                    if (oldIcon) {
+                        const newIconClass = opt.querySelector('i').className;
+                        oldIcon.className = newIconClass;
+                    }
+                }
+                
+                document.querySelectorAll('#privacy-options .dropdown-option').forEach(o => o.classList.remove('active'));
+                opt.classList.add('active');
+                document.getElementById('privacy-options').style.display = 'none';
+            });
+        });
+
+
+
+        document.addEventListener('click', () => {
+            const opts = document.getElementById('privacy-options');
+            if (opts) opts.style.display = 'none';
+            
+            // Close all post menus
+            document.querySelectorAll('.post-menu').forEach(m => m.style.display = 'none');
+        });
+
+        document.getElementById('confirm-share-btn')?.addEventListener('click', () => {
+            this.confirmShare();
+        });
+
+
+
+        // Toggle Inline Features (New)
+        document.getElementById('tag-location')?.addEventListener('click', () => {
+            this.toggleInlineFeature('map');
+        });
+        
+        document.getElementById('attach-trip')?.addEventListener('click', () => {
+            this.toggleInlineFeature('attach');
+        });
+
+        // Upload media
+        document.getElementById('media-upload')?.addEventListener('change', (e) => {
+            this.handleMediaUpload(e);
+        });
+
+        // Global Search (Universal support for sidebar & center search bars)
+        const allSearchInputs = document.querySelectorAll('#user-search-input, .global-search-input');
+        allSearchInputs.forEach(input => {
+            input.addEventListener('input', (e) => this.performGlobalSearch(e.target.value, input));
+            input.addEventListener('focus', () => this.showSearchSuggestions(input));
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    this.saveSearchHistory(e.target.value);
+                    this.openFullSearch(e.target.value);
+                    // Clear and hide results
+                    const card = input.closest('.search-card');
+                    const res = card?.querySelector('#search-results, .search-results-overlay');
+                    if (res) res.style.display = 'none';
+                }
+            });
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.search-card')) {
+                document.querySelectorAll('#search-results, .search-results-overlay').forEach(el => el.style.display = 'none');
+            }
+        });
         // Chat drawer close
         document.getElementById('close-chat')?.addEventListener('click', () => this.closeChat());
         // Chat send
@@ -1615,9 +2084,362 @@ const SocialHub = {
     openPostModal: function () {
         const m = document.getElementById('post-modal');
         if (m) {
+            const nameEl = document.getElementById('modal-post-name');
+            const avatarEl = document.getElementById('modal-post-avatar');
+            if (nameEl && this.user) nameEl.textContent = this.user.displayName || this.user.name || 'Người dùng';
+            if (avatarEl && this.user) avatarEl.src = this.user.avatar || 'assets/default-avatar.svg';
+            
             m.removeAttribute('hidden');
             document.getElementById('post-content')?.focus();
         }
+    },
+
+    // ========== MAP PICKER SYSTEM ==========
+    toggleInlineFeature: function(feature) {
+        const mapContainer = document.getElementById('inline-map-picker');
+        const attachContainer = document.getElementById('inline-attach-picker');
+        
+        if (feature === 'map') {
+            attachContainer.style.display = 'none';
+            if (mapContainer.style.display === 'none') {
+                mapContainer.style.display = 'block';
+                this.initInlineMap();
+            } else {
+                mapContainer.style.display = 'none';
+            }
+        } else if (feature === 'attach') {
+            mapContainer.style.display = 'none';
+            if (attachContainer.style.display === 'none') {
+                attachContainer.style.display = 'block';
+                this.initInlineAttach();
+            } else {
+                attachContainer.style.display = 'none';
+            }
+        }
+    },
+
+    initInlineMap: function() {
+        const container = document.getElementById('inline-map-picker');
+        container.innerHTML = `
+            <div class="inline-map-wrapper">
+                <div id="inline-leaflet-map" style="height: 250px; border-radius: 12px; margin-bottom: 10px;"></div>
+                <div class="inline-map-controls">
+                    <div id="inline-map-address" class="inline-map-address">Đang xác định vị trí...</div>
+                    <div style="display:flex; gap:8px;">
+                        <button class="btn-confirm-loc" style="background:rgba(255,255,255,0.1); color:#fff;" onclick="SocialHub.cancelInlineLocation()">Hủy</button>
+                        <button class="btn-confirm-loc" onclick="SocialHub.confirmInlineLocation()">Xác nhận</button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        if (typeof L === 'undefined') return;
+
+        const defaultLat = 21.0285;
+        const defaultLng = 105.8542;
+
+        this.inlineMap = L.map('inline-leaflet-map', {
+            center: [defaultLat, defaultLng],
+            zoom: 15,
+            zoomControl: false
+        });
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(this.inlineMap);
+
+        let moveTimeout;
+        this.inlineMap.on('move', () => {
+            document.getElementById('inline-map-address').textContent = "Đang tìm địa chỉ...";
+            clearTimeout(moveTimeout);
+            moveTimeout = setTimeout(() => this.updateInlineMapAddress(), 500);
+        });
+
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition((pos) => {
+                this.inlineMap.setView([pos.coords.latitude, pos.coords.longitude], 15);
+            });
+        }
+        this.updateInlineMapAddress();
+    },
+
+    updateInlineMapAddress: async function() {
+        if (!this.inlineMap) return;
+        const center = this.inlineMap.getCenter();
+        const addrEl = document.getElementById('inline-map-address');
+        
+        try {
+            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${center.lat}&lon=${center.lng}&zoom=18&addressdetails=1`);
+            const data = await res.json();
+            
+            const addr = data.address || {};
+            // Xây dựng địa chỉ chi tiết hơn: Số nhà + Đường + Phường/Xã + Quận/Huyện + Tỉnh/Thành
+            const parts = [];
+            if (addr.house_number) parts.push(addr.house_number);
+            if (addr.road) parts.push(addr.road);
+            if (addr.suburb || addr.neighbourhood || addr.village || addr.commune) {
+                parts.push(addr.suburb || addr.neighbourhood || addr.village || addr.commune);
+            }
+            if (addr.city_district || addr.district || addr.county) {
+                parts.push(addr.city_district || addr.district || addr.county);
+            }
+            if (addr.city || addr.province || addr.state) {
+                parts.push(addr.city || addr.province || addr.state);
+            }
+
+            const finalAddr = parts.length > 0 ? parts.join(', ') : (data.display_name || "Vị trí đã chọn");
+            if (addrEl) addrEl.textContent = finalAddr;
+            this.lastPickedLocation = { lat: center.lat, lng: center.lng, address: finalAddr };
+        } catch (e) {
+            if (addrEl) addrEl.textContent = "Không thể lấy địa chỉ";
+        }
+    },
+
+    confirmInlineLocation: function() {
+        if (this.lastPickedLocation) {
+            const tagBtn = document.getElementById('tag-location');
+            if (tagBtn) {
+                tagBtn.querySelector('span').textContent = this.lastPickedLocation.address.substring(0, 30) + (this.lastPickedLocation.address.length > 30 ? '...' : '');
+                tagBtn.dataset.location = this.lastPickedLocation.address;
+                tagBtn.classList.add('active');
+            }
+        }
+        document.getElementById('inline-map-picker').style.display = 'none';
+    },
+
+    cancelInlineLocation: function() {
+        document.getElementById('inline-map-picker').style.display = 'none';
+    },
+
+    initInlineAttach: function() {
+        const container = document.getElementById('inline-attach-picker');
+        container.innerHTML = `
+            <div class="inline-attach-wrapper">
+                <div class="inline-attach-tabs">
+                    <button class="inline-tab active" onclick="SocialHub.loadInlineAttachItems('trips', this)">Lịch trình</button>
+                    <button class="inline-tab" onclick="SocialHub.loadInlineAttachItems('tours', this)">Tour</button>
+                    <button class="inline-tab" onclick="SocialHub.loadInlineAttachItems('places', this)">Địa điểm</button>
+                </div>
+                <div id="inline-attach-list" class="inline-attach-list">Đang tải...</div>
+            </div>
+        `;
+        this.loadInlineAttachItems('trips');
+    },
+
+    loadInlineAttachItems: async function(type, btn) {
+        if (btn) {
+            document.querySelectorAll('.inline-tab').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        }
+        const listEl = document.getElementById('inline-attach-list');
+        listEl.innerHTML = '<div class="loader-sm"></div>';
+        
+        try {
+            const token = localStorage.getItem('wander_token');
+            let items = [];
+            
+            if (type === 'trips') {
+                const res = await fetch('/api/planner/my-trips', { headers: { 'x-auth-token': token } });
+                const data = await res.json();
+                items = (data.trips || data.data || []).map(t => ({
+                    id: t._id,
+                    title: t.name || t.destination,
+                    subtitle: `${t.days || 0} ngày`,
+                    icon: '🎒',
+                    type: 'itinerary'
+                }));
+            } else {
+                // Lấy thông tin user để biết danh sách favorites
+                const meRes = await fetch('/api/auth/user/me', { headers: { 'x-auth-token': token } });
+
+                const meData = await meRes.json();
+                const favorites = meData.user?.favorites || [];
+
+                const res = await fetch('/api/places', { headers: { 'x-auth-token': token } });
+                const data = await res.json();
+                
+                // Lọc theo favorites của user nếu là tab 'places'
+                let allPlaces = data.data || [];
+                if (type === 'places') {
+                    allPlaces = allPlaces.filter(p => favorites.includes(p.id) || favorites.includes(p._id));
+                } else if (type === 'tours') {
+                    // Đối với Tour, có thể lấy các địa điểm có tag tour hoặc đơn giản là lọc riêng
+                    allPlaces = allPlaces.filter(p => p.kind === 'tour' || p.category === 'tour');
+                }
+
+                items = allPlaces.slice(0, 10).map(p => ({
+                    id: p._id || p.id,
+                    title: p.name,
+                    subtitle: p.region || 'Địa điểm',
+                    icon: type === 'tours' ? '🚌' : '📍',
+                    type: type === 'tours' ? 'tour' : 'place'
+                }));
+            }
+
+            if (items.length === 0) {
+                listEl.innerHTML = `<p class="empty-inline" style="text-align:center; color:var(--text-muted); padding:20px;">Bạn chưa lưu ${type === 'trips' ? 'lịch trình' : type === 'tours' ? 'tour' : 'địa điểm'} nào.</p>`;
+                return;
+            }
+
+            listEl.innerHTML = items.map(item => `
+                <div class="inline-attach-item" onclick="SocialHub.selectAttachment('${item.id}', '${item.title.replace(/'/g, "\\'")}', '${item.type}', '${item.subtitle}')">
+                    <span style="font-size: 1.2rem;">${item.icon}</span>
+                    <div class="info">
+                        <strong>${item.title}</strong>
+                        <small>${item.subtitle}</small>
+                    </div>
+                </div>
+            `).join('');
+        } catch (e) {
+            console.error(e);
+            listEl.innerHTML = '<p class="error-inline">Lỗi tải dữ liệu.</p>';
+        }
+    },
+
+
+
+    initMapPicker: function() {
+        if (typeof L === 'undefined') {
+            console.error("Leaflet not loaded");
+            return;
+        }
+
+        // Default to Hanoi
+        const defaultLat = 21.0285;
+        const defaultLng = 105.8542;
+
+        this.map = L.map('leaflet-map', {
+            center: [defaultLat, defaultLng],
+            zoom: 15,
+            zoomControl: false
+        });
+
+        L.control.zoom({ position: 'bottomright' }).addTo(this.map);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(this.map);
+
+        this.mapPickerInitialized = true;
+
+        // Handle address update on map move
+        let moveTimeout;
+        this.map.on('move', () => {
+            document.getElementById('map-picked-address').textContent = "Đang xác định...";
+            clearTimeout(moveTimeout);
+            moveTimeout = setTimeout(() => {
+                this.updateMapAddress();
+            }, 500);
+        });
+
+        // Try to get user's current location
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition((pos) => {
+                const latlng = [pos.coords.latitude, pos.coords.longitude];
+                this.map.setView(latlng, 15);
+            });
+        }
+
+        this.updateMapAddress();
+    },
+
+    updateMapAddress: async function() {
+        if (!this.map) return;
+        const center = this.map.getCenter();
+        const addrEl = document.getElementById('map-picked-address');
+        
+        try {
+            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${center.lat}&lon=${center.lng}&zoom=18&addressdetails=1`);
+            const data = await res.json();
+            const address = data.display_name || "Vị trí đã chọn";
+            if (addrEl) addrEl.textContent = address;
+            this.lastPickedLocation = {
+                lat: center.lat,
+                lng: center.lng,
+                address: address
+            };
+        } catch (e) {
+            if (addrEl) addrEl.textContent = "Không thể lấy địa chỉ";
+        }
+    },
+
+    // ========== MEDIA HANDLING SYSTEM ==========
+    handleMediaUpload: function(e) {
+        const files = Array.from(e.target.files);
+        if (files.length === 0) return;
+
+        // Append new files to the list
+        files.forEach(file => {
+            if (!this.postMediaFiles.some(f => f.name === file.name && f.size === file.size)) {
+                this.postMediaFiles.push(file);
+            }
+        });
+
+        this.renderMediaPreview();
+        // Clear input to allow re-selecting same file
+        e.target.value = '';
+    },
+
+    removeMedia: function(index) {
+        this.postMediaFiles.splice(index, 1);
+        this.renderMediaPreview();
+    },
+
+    renderMediaPreview: function() {
+        const container = document.getElementById('media-preview');
+        if (!container) return;
+
+        if (this.postMediaFiles.length === 0) {
+            container.innerHTML = '';
+            return;
+        }
+
+        container.className = 'media-preview-grid';
+        container.innerHTML = this.postMediaFiles.map((file, index) => {
+            const url = URL.createObjectURL(file);
+            const isVideo = file.type.startsWith('video/');
+            const isAudio = file.type.startsWith('audio/');
+            
+            let mediaHtml = `<img src="${url}">`;
+            if (isVideo) mediaHtml = `<video src="${url}"></video>`;
+            if (isAudio) mediaHtml = `
+                <div class="audio-preview-item">
+                    <i class="fas fa-volume-up"></i>
+                    <span>${file.name.substring(0, 15)}...</span>
+                </div>
+            `;
+            
+            return `
+                <div class="preview-item">
+                    ${mediaHtml}
+                    <button class="btn-remove-media" onclick="SocialHub.removeMedia(${index})">&times;</button>
+                </div>
+            `;
+        }).join('');
+        
+        // Add layout selector if multiple images
+        if (this.postMediaFiles.length > 1) {
+            const currentLayout = this.mediaLayout || 'grid';
+            container.insertAdjacentHTML('afterend', `
+                <div class="media-layout-selector" id="layout-selector-wrap">
+                    <div class="layout-opt ${currentLayout === 'grid' ? 'active' : ''}" onclick="SocialHub.setMediaLayout('grid')">Lưới</div>
+                    <div class="layout-opt ${currentLayout === 'column' ? 'active' : ''}" onclick="SocialHub.setMediaLayout('column')">Cột</div>
+                    <div class="layout-opt ${currentLayout === 'carousel' ? 'active' : ''}" onclick="SocialHub.setMediaLayout('carousel')">Trượt</div>
+                </div>
+            `);
+            // Remove old selector if exists
+            const oldSelectors = document.querySelectorAll('#layout-selector-wrap');
+            if (oldSelectors.length > 1) oldSelectors[0].remove();
+        } else {
+            document.getElementById('layout-selector-wrap')?.remove();
+        }
+    },
+
+    setMediaLayout: function(layout) {
+        this.mediaLayout = layout;
+        document.querySelectorAll('.layout-opt').forEach(opt => {
+            opt.classList.toggle('active', opt.textContent.toLowerCase() === (layout === 'grid' ? 'lưới' : layout === 'column' ? 'cột' : 'trượt'));
+        });
     },
 
     switchTab: function (tab) {
@@ -1629,6 +2451,125 @@ const SocialHub = {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     },
 
+    openAttachModal: function(type = 'trips') {
+        const m = document.getElementById('attach-modal');
+        if (!m) return;
+        m.style.display = 'flex';
+        document.querySelectorAll('.attach-tab').forEach(t => {
+            t.classList.toggle('active', t.dataset.type === type);
+        });
+        this.loadAttachItems(type);
+    },
+
+    loadAttachItems: async function(type) {
+        const listEl = document.getElementById('attach-list');
+        if (!listEl) return;
+        listEl.innerHTML = '<div style="text-align:center; color: var(--text-muted); padding: 1rem;"><i class="fas fa-spinner fa-spin"></i> Đang tải...</div>';
+        
+        try {
+            const token = localStorage.getItem('wander_token');
+            if (type === 'trips') {
+                const res = await fetch('/api/planner/my-trips', { headers: { 'x-auth-token': token } });
+                const data = await res.json();
+                if (data.trips && data.trips.length > 0) {
+                    listEl.innerHTML = data.trips.map(t => `
+                        <div class="attach-item" onclick="SocialHub.selectAttachment('${t._id}', '${t.name.replace(/'/g, "\\'")}', 'itinerary')">
+                            <div style="font-size: 1.5rem; width: 40px; text-align: center;">🎒</div>
+                            <div>
+                                <div style="font-weight: 600; font-size: 0.95rem;">${t.name}</div>
+                                <div style="font-size: 0.8rem; color: var(--text-muted);">${t.days} ngày - ${new Date(t.startDate).toLocaleDateString('vi-VN')}</div>
+                            </div>
+                        </div>
+                    `).join('');
+                } else if (data.data && data.data.length > 0) {
+                    // Fallback for different API response structure
+                    listEl.innerHTML = data.data.map(t => `
+                        <div class="attach-item" onclick="SocialHub.selectAttachment('${t._id}', '${(t.name || t.destination).replace(/'/g, "\\'")}', 'itinerary')">
+                            <div style="font-size: 1.5rem; width: 40px; text-align: center;">🎒</div>
+                            <div>
+                                <div style="font-weight: 600; font-size: 0.95rem;">${t.name || t.destination}</div>
+                                <div style="font-size: 0.8rem; color: var(--text-muted);">${t.days} ngày</div>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    listEl.innerHTML = '<div style="text-align:center; color: var(--text-muted); padding: 1rem;">Bạn chưa có lịch trình nào.</div>';
+                }
+            } else if (type === 'tours') {
+                // Tours currently don't have a dedicated endpoint in the provided routes, 
+                // but we can fetch featured places that are marked as 'tour' or similar.
+                // For now, let's fetch a few destinations from places API.
+                const res = await fetch('/api/places', { headers: { 'x-auth-token': token } });
+                const data = await res.json();
+                if (data.success && data.data && data.data.length > 0) {
+                    listEl.innerHTML = data.data.slice(0, 5).map(p => `
+                        <div class="attach-item" onclick="SocialHub.selectAttachment('${p._id}', '${p.name.replace(/'/g, "\\'")}', 'tour')">
+                            <div style="font-size: 1.5rem; width: 40px; text-align: center; color: #10b981;"><i class="fas fa-bus"></i></div>
+                            <div>
+                                <div style="font-weight: 600; font-size: 0.95rem;">${p.name}</div>
+                                <div style="font-size: 0.8rem; color: var(--text-muted);">${p.region || 'Việt Nam'} • ${p.priceFrom || 'Liên hệ'}</div>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    listEl.innerHTML = '<div style="text-align:center; color: var(--text-muted); padding: 1rem;">Không tìm thấy tour khả dụng.</div>';
+                }
+            } else if (type === 'places') {
+                const res = await fetch('/api/places', { headers: { 'x-auth-token': token } });
+                const data = await res.json();
+                if (data.success && data.data && data.data.length > 0) {
+                    listEl.innerHTML = data.data.slice(0, 10).map(p => `
+                        <div class="attach-item" onclick="SocialHub.selectAttachment('${p._id}', '${p.name.replace(/'/g, "\\'")}', 'place')">
+                            <div style="font-size: 1.5rem; width: 40px; text-align: center; color: #f43f5e;"><i class="fas fa-location-dot"></i></div>
+                            <div>
+                                <div style="font-weight: 600; font-size: 0.95rem;">${p.name}</div>
+                                <div style="font-size: 0.8rem; color: var(--text-muted);">${p.region || 'Địa điểm'} • ${p.verified ? '✅ Đã xác minh' : 'Chưa xác minh'}</div>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    listEl.innerHTML = '<div style="text-align:center; color: var(--text-muted); padding: 1rem;">Không tìm thấy địa điểm nào.</div>';
+                }
+            }
+        } catch(e) {
+            listEl.innerHTML = '<div style="text-align:center; color: #f43f5e; padding: 1rem;">Lỗi tải dữ liệu.</div>';
+        }
+    },
+
+    selectAttachment: function(id, title, type, subtitle = '') {
+        // Map types to schema: itinerary -> itinerary, others -> destination
+        const schemaType = type === 'itinerary' ? 'itinerary' : 'destination';
+        this.currentPostAttachment = { refId: id, title, type: schemaType, subtitle };
+
+        
+        const attachPreview = document.getElementById('attachment-preview-container');
+        const attachTitle = document.getElementById('attachment-preview-title');
+        const attachSubtitle = document.getElementById('attachment-preview-subtitle');
+        const attachIcon = document.getElementById('attachment-preview-icon');
+        
+        if (attachPreview) {
+            if (attachTitle) attachTitle.textContent = title;
+            if (attachSubtitle) attachSubtitle.textContent = subtitle;
+            if (attachIcon) {
+                if(type === 'itinerary') attachIcon.textContent = '🎒';
+                else if(type === 'tour') attachIcon.innerHTML = '<i class="fas fa-bus" style="color:#fbbf24;"></i>';
+                else attachIcon.innerHTML = '<i class="fas fa-map-marker-alt" style="color:#f43f5e;"></i>';
+            }
+            attachPreview.style.display = 'flex';
+        }
+        
+        document.getElementById('inline-attach-picker').style.display = 'none';
+        const attachBtn = document.getElementById('attach-trip');
+        if (attachBtn) attachBtn.classList.add('active');
+    },
+
+    removeAttachment: function() {
+        this.currentPostAttachment = null;
+        document.getElementById('attachment-preview-container').style.display = 'none';
+        document.getElementById('attach-trip').classList.remove('active');
+    },
+
+
     submitPost: async function () {
         const contentInput = document.getElementById('post-content');
         const content = contentInput ? contentInput.value : '';
@@ -1636,9 +2577,10 @@ const SocialHub = {
         const locationEl = document.getElementById('tag-location');
         const submitBtn = document.getElementById('submit-post');
 
-        if (!content.trim() && (!fileInput?.files || fileInput.files.length === 0)) {
-            return alert("Vui lòng nhập nội dung hoặc chọn ảnh!");
+        if (!content.trim() && this.postMediaFiles.length === 0 && !this.currentPostAttachment) {
+            return alert("Vui lòng nhập nội dung, chọn ảnh hoặc đính kèm lịch trình!");
         }
+
 
         if (submitBtn) {
             submitBtn.disabled = true;
@@ -1648,15 +2590,70 @@ const SocialHub = {
         try {
             let res;
             const token = localStorage.getItem('wander_token');
-            if (fileInput?.files?.length > 0) {
+            const visSelect = document.getElementById('audience-selected');
+            const visibility = visSelect ? visSelect.dataset.value : 'public';
+
+            if (this.editingPostId) {
+                // UPDATE POST (Media update not supported via simple PUT yet, just JSON fields)
+                res = await fetch(`/api/social/posts/${this.editingPostId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-auth-token': token
+                    },
+                    body: JSON.stringify({
+                        content,
+                        location: locationEl?.dataset?.location ? { name: locationEl.dataset.location } : null,
+                        attachment: this.currentPostAttachment,
+                        visibility: visibility
+                    })
+                });
+            } else if (this.postMediaFiles.length > 0) {
                 const formData = new FormData();
                 formData.append('content', content || '');
+                formData.append('visibility', visibility);
                 if (locationEl?.dataset?.location) formData.append('locationName', locationEl.dataset.location);
-                Array.from(fileInput.files).forEach(f => formData.append('media', f));
-                res = await fetch('/api/social/posts/media', {
-                    method: 'POST',
-                    headers: { 'x-auth-token': token },
-                    body: formData
+                if (this.currentPostAttachment) formData.append('attachment', JSON.stringify(this.currentPostAttachment));
+                if (this.mediaLayout) formData.append('mediaLayout', this.mediaLayout);
+                
+                this.postMediaFiles.forEach(f => formData.append('media', f));
+                
+                res = await new Promise((resolve, reject) => {
+                    const xhr = new XMLHttpRequest();
+                    const progContainer = document.getElementById('upload-progress-container');
+                    const progBar = document.getElementById('upload-progress-bar');
+                    const progPercent = document.getElementById('upload-percent');
+                    
+                    if (progContainer) progContainer.style.display = 'block';
+
+                    xhr.upload.addEventListener('progress', (e) => {
+                        if (e.lengthComputable) {
+                            const percent = Math.round((e.loaded / e.total) * 100);
+                            if (progBar) progBar.style.width = percent + '%';
+                            if (progPercent) progPercent.textContent = percent + '%';
+                        }
+                    });
+
+                    xhr.onreadystatechange = () => {
+                        if (xhr.readyState === 4) {
+                            if (progContainer) progContainer.style.display = 'none';
+                            try {
+                                const response = JSON.parse(xhr.responseText);
+                                resolve({ ok: xhr.status >= 200 && xhr.status < 300, json: () => Promise.resolve(response) });
+                            } catch (e) {
+                                reject(new Error("Lỗi phản hồi từ server"));
+                            }
+                        }
+                    };
+
+                    xhr.onerror = () => {
+                        if (progContainer) progContainer.style.display = 'none';
+                        reject(new Error("Lỗi kết nối mạng"));
+                    };
+
+                    xhr.open('POST', '/api/social/posts/media');
+                    xhr.setRequestHeader('x-auth-token', token);
+                    xhr.send(formData);
                 });
             } else {
                 res = await fetch('/api/social/posts', {
@@ -1667,15 +2664,29 @@ const SocialHub = {
                     },
                     body: JSON.stringify({
                         content,
-                        location: locationEl?.dataset?.location ? { name: locationEl.dataset.location } : null
+                        location: locationEl?.dataset?.location ? { name: locationEl.dataset.location } : null,
+                        attachment: this.currentPostAttachment,
+                        visibility: visibility
                     })
                 });
             }
+
             const data = await res.json();
-                await this.loadUserProfile();
+            
+            if (!res.ok || !data.success) {
+                throw new Error(data.message || "Không thể đăng bài");
+            }
                 
-                // Optimistic UI: Prepend to feed and update local array
-                const newPost = data.post;
+            // Clear attachment state and UI
+            this.currentPostAttachment = null;
+            const attachPreview = document.getElementById('attachment-preview-container');
+            if (attachPreview) attachPreview.style.display = 'none';
+
+            await this.loadUserProfile();
+            
+            // Optimistic UI: Prepend to feed and update local array
+            const newPost = data.post;
+
                 if (newPost) {
                     if (!this.posts.some(p => p._id === newPost._id)) {
                         this.posts.unshift(newPost);
@@ -1690,17 +2701,53 @@ const SocialHub = {
                             feedContainer.insertAdjacentHTML('afterbegin', postHtml);
                         }
                     }
-                    if (window.WanderUI) WanderUI.showToast('Đã đăng bài viết! 🎉', 'success');
+                    if (window.WanderUI) WanderUI.showToast(this.editingPostId ? 'Đã cập nhật bài viết! ✨' : 'Đã đăng bài viết! 🎉', 'success');
+                    
+                    // Reset modal state
+                    this.editingPostId = null;
+                    document.querySelector('.modal__title').textContent = 'Tạo bài viết mới';
+                    document.getElementById('submit-post').textContent = 'Đăng bài';
+
+                    // Clear and hide modal
+                    document.getElementById('post-modal')?.setAttribute('hidden', '');
+                    if (contentInput) contentInput.value = '';
+                    if (fileInput) fileInput.value = '';
+                    this.postMediaFiles = [];
+                    this.mediaLayout = 'grid';
+                    const mediaPreview = document.getElementById('media-preview');
+                    if (mediaPreview) mediaPreview.innerHTML = '';
+                    document.getElementById('layout-selector-wrap')?.remove();
+                    
+                    const tagBtn = document.getElementById('tag-location');
+                    if (tagBtn) {
+                        tagBtn.querySelector('span').textContent = 'Gắn thẻ';
+                        delete tagBtn.dataset.location;
+                        tagBtn.classList.remove('active');
+                    }
+                    const locContainer = document.getElementById('location-input-container');
+                    if (locContainer) locContainer.style.display = 'none';
+                    const locInput = document.getElementById('post-location-input');
+                    if (locInput) locInput.value = '';
+
+                    // If editing, refresh the post in the feed instead of prepending
+                    if (data.post) {
+                        const existingIdx = this.posts.findIndex(p => p._id === data.post._id);
+                        if (existingIdx !== -1) {
+                            this.posts[existingIdx] = data.post;
+                            this.renderFeed(); // Full re-render for simplicity after edit
+                        }
+                    }
                 }
         } catch (err) {
             console.error(err);
-            alert("Lỗi khi đăng bài!");
+            alert("Lỗi khi xử lý bài viết!");
         } finally {
             if (submitBtn) {
                 submitBtn.disabled = false;
-                submitBtn.textContent = "Đăng bài";
+                submitBtn.textContent = this.editingPostId ? "Cập nhật" : "Đăng bài";
             }
         }
+
     },
 
     toggleLike: async function (postId, isLiked) {
@@ -1717,6 +2764,64 @@ const SocialHub = {
             const isHidden = section.style.display === 'none';
             section.style.display = isHidden ? 'block' : 'none';
             if (isHidden) section.querySelector('input')?.focus();
+        }
+    },
+
+    sharePost: function (postId) {
+        const post = this.posts.find(p => p._id === postId);
+        if (!post) return;
+
+        // Close menu
+        const menu = document.getElementById(`post-menu-${postId}`);
+        if (menu) menu.style.display = 'none';
+
+        this.sharingPostId = postId;
+        const modal = document.getElementById('share-modal');
+        const preview = document.getElementById('share-preview-post');
+        const commentInput = document.getElementById('share-comment');
+
+        if (modal && preview) {
+            preview.innerHTML = `📎 Chia sẻ từ @${post.userName}: "${post.content ? post.content.substring(0, 80) + (post.content.length > 80 ? '...' : '') : '(Ảnh/Video)'}"`;
+            if (commentInput) commentInput.value = '';
+            modal.style.display = 'flex';
+        }
+    },
+
+    confirmShare: async function () {
+        if (!this.sharingPostId) return;
+
+        const comment = document.getElementById('share-comment')?.value || '';
+        const btn = document.getElementById('confirm-share-btn');
+        const originalBtnText = btn.textContent;
+
+        try {
+            btn.disabled = true;
+            btn.textContent = 'Đang chia sẻ...';
+
+            const res = await fetch(`/api/social/posts/${this.sharingPostId}/share`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-auth-token': localStorage.getItem('wander_token')
+                },
+                body: JSON.stringify({ comment })
+            });
+
+            const data = await res.json();
+            if (data.success) {
+                if (window.WanderUI) WanderUI.showToast('Đã chia sẻ bài viết! 🔗', 'success');
+                document.getElementById('share-modal').style.display = 'none';
+                await this.fetchFeed();
+            } else {
+                throw new Error(data.message || 'Lỗi khi chia sẻ');
+            }
+        } catch (err) {
+            console.error(err);
+            if (window.WanderUI) WanderUI.showToast('Không thể chia sẻ bài viết', 'error');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = originalBtnText;
+            this.sharingPostId = null;
         }
     },
 
@@ -1759,20 +2864,56 @@ const SocialHub = {
         } catch (err) { }
     },
 
-    sharePost: async function (postId) {
+    copyPostLink: async function (postId) {
+        // Close menu
+        const menu = document.getElementById(`post-menu-${postId}`);
+        if (menu) menu.style.display = 'none';
+
         const postUrl = `${window.location.origin}/social-hub.html?post=${postId}`;
         try {
             await navigator.clipboard.writeText(postUrl);
-            const btn = event.currentTarget;
-            const originalText = btn.innerHTML;
-            btn.innerHTML = '✅ Đã sao chép';
-            setTimeout(() => { btn.innerHTML = originalText; }, 2000);
+            if (window.WanderUI) WanderUI.showToast('Đã sao chép liên kết vào bộ nhớ tạm! 📋', 'success');
         } catch (err) {
-            alert("Không thể sao chép liên kết!");
+            if (window.WanderUI) WanderUI.showToast('Không thể sao chép liên kết', 'error');
         }
     },
 
+    hidePost: async function (postId) {
+        // Close menu
+        const menu = document.getElementById(`post-menu-${postId}`);
+        if (menu) menu.style.display = 'none';
+
+        try {
+            const res = await fetch('/api/social/not-interested', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json', 
+                    'x-auth-token': localStorage.getItem('wander_token') 
+                },
+                body: JSON.stringify({ targetId: postId, targetType: 'post' })
+            });
+            const data = await res.json();
+            if (data.success) {
+                if (window.WanderUI) WanderUI.showToast('Đã ẩn bài viết. Chúng tôi sẽ hạn chế nội dung tương tự.', 'info');
+                // Remove from local feed
+                this.posts = this.posts.filter(p => p._id !== postId);
+                this.renderFeed();
+            }
+        } catch (err) { }
+    },
+
+    reportPost: function (postId) {
+        if (window.WanderUI) WanderUI.showToast('Cảm ơn bạn đã báo cáo. Chúng tôi sẽ xem xét bài viết này.', 'info');
+        // Close menu
+        const menu = document.getElementById(`post-menu-${postId}`);
+        if (menu) menu.style.display = 'none';
+    },
+
     deletePost: async function (postId) {
+        // Close menu
+        const menu = document.getElementById(`post-menu-${postId}`);
+        if (menu) menu.style.display = 'none';
+
         if (!window.WanderUI || !WanderUI.confirm) {
             if (!confirm("Bạn có chắc muốn xóa bài viết này?")) return;
         } else {
@@ -1780,10 +2921,26 @@ const SocialHub = {
             if (!ok) return;
         }
         try {
-            await fetch(`/api/social/posts/${postId}`, { method: 'DELETE', headers: { 'x-auth-token': localStorage.getItem('wander_token') } });
-            await this.fetchFeed();
-            await this.loadUserProfile(); // Update stats
-        } catch (err) { }
+            const token = localStorage.getItem('wander_token');
+            const res = await fetch(`/api/social/posts/${postId}`, { 
+                method: 'DELETE', 
+                headers: { 'x-auth-token': token } 
+            });
+            const data = await res.json();
+            
+            if (data.success) {
+                if (window.WanderUI) WanderUI.showToast('Đã xóa bài viết', 'success');
+                // Instant UI feedback: filter out and re-render
+                this.posts = this.posts.filter(p => p._id !== postId);
+                this.renderFeed();
+                await this.loadUserProfile(); // Update stats in sidebar
+            } else {
+                throw new Error(data.message || "Không thể xóa bài viết");
+            }
+        } catch (err) {
+            console.error(err);
+            if (window.WanderUI) WanderUI.showToast('Lỗi khi xóa bài viết', 'error');
+        }
     },
 
     viewProfile: function (userId) {
@@ -1961,8 +3118,22 @@ const SocialHub = {
                     body.innerHTML = data.data.map(m => {
                         const myId = this.user?._id || this.user?.id;
                         const isSent = myId && (m.senderId === myId || m.senderId?.toString() === myId);
+                        
+                        let storyRefHtml = '';
+                        if (m.storyRef && m.storyRef.mediaUrl) {
+                            storyRefHtml = `
+                                <div class="chat-story-ref" onclick="SocialHub.openStoryViewerByRef('${m.storyRef.id}')">
+                                    <div class="story-ref-thumb" style="background-image: url('${m.storyRef.mediaUrl}')">
+                                        <div class="story-ref-play"><i class="fas fa-play-circle"></i></div>
+                                    </div>
+                                    <div class="story-ref-text">Phản hồi thước phim</div>
+                                </div>
+                            `;
+                        }
+
                         return `
                         <div class="chat-msg ${isSent ? 'sent' : 'received'}">
+                            ${storyRefHtml}
                             <p>${m.text}</p>
                             <span class="msg-time">${this.formatTime(m.createdAt)}</span>
                         </div>`;
@@ -2073,12 +3244,12 @@ const SocialHub = {
     },
 
     // === GLOBAL SEARCH SYSTEM ===
-    performGlobalSearch: async function (query) {
-        const resultsEl = document.getElementById('search-results');
+    performGlobalSearch: async function (query, inputEl) {
+        const resultsEl = inputEl ? inputEl.closest('.search-card').querySelector('#search-results, .search-results-overlay') : document.getElementById('search-results');
         if (!resultsEl) return;
 
         if (!query || query.length < 2) {
-            this.showSearchSuggestions();
+            this.showSearchSuggestions(inputEl);
             return;
         }
 
@@ -2091,7 +3262,7 @@ const SocialHub = {
             });
             const data = await res.json();
             if (data.success) {
-                this.renderSearchResults(data.data);
+                this.renderSearchResults(data.data, inputEl);
             } else {
                 console.error("Search API Error:", data.message);
                 resultsEl.innerHTML = `<div class="search-error">Lỗi tìm kiếm: ${data.message || 'Không xác định'}</div>`;
@@ -2118,8 +3289,8 @@ const SocialHub = {
         this.showSearchSuggestions();
     },
 
-    showSearchSuggestions: function () {
-        const resultsEl = document.getElementById('search-results');
+    showSearchSuggestions: function (inputEl) {
+        const resultsEl = inputEl ? inputEl.closest('.search-card').querySelector('#search-results, .search-results-overlay') : document.getElementById('search-results');
         if (!resultsEl) return;
 
         resultsEl.style.display = 'block';
@@ -2146,8 +3317,8 @@ const SocialHub = {
         `;
     },
 
-    renderSearchResults: function (results) {
-        const resultsEl = document.getElementById('search-results');
+    renderSearchResults: function (results, inputEl) {
+        const resultsEl = inputEl ? inputEl.closest('.search-card').querySelector('#search-results, .search-results-overlay') : document.getElementById('search-results');
         if (!resultsEl) return;
 
         if (results.length === 0) {
@@ -2194,11 +3365,16 @@ const SocialHub = {
         } else if (type === 'destination') {
             window.location.href = `destination-detail.html?id=${id}`;
         }
-        document.getElementById('search-results').style.display = 'none';
+        // Hide all search results overlays
+        document.querySelectorAll('#search-results, .search-results-overlay').forEach(el => el.style.display = 'none');
     },
 
     openFullSearch: async function (query) {
         if (!query || query.length < 2) return;
+
+        // Hide all search results overlays immediately
+        document.querySelectorAll('#search-results, .search-results-overlay').forEach(el => el.style.display = 'none');
+
         this.saveSearchHistory(query);
         this.switchTab('search');
         document.getElementById('search-query-display').textContent = query;

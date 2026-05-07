@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="profile.css">
     <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
     <header class="site-header" id="header-container"></header>
@@ -16,7 +17,15 @@
         <!-- Header Hồ sơ -->
         <div class="profile-header-section">
             <div class="profile-cover" id="profile-cover-bg">
-                <button class="btn-edit-cover" id="btn-edit-cover">📸 <span>Chỉnh sửa ảnh bìa</span></button>
+                <div class="cover-edit-wrapper">
+                    <button class="btn-edit-cover" id="btn-edit-cover">
+                        <i class="fas fa-camera"></i> <span>Chỉnh sửa ảnh bìa</span>
+                    </button>
+                    <div class="cover-edit-menu" id="cover-edit-menu">
+                        <button onclick="document.getElementById('cover-input').click()"><i class="fas fa-upload"></i> Tải ảnh lên</button>
+                        <button onclick="UserProfile.openPhotoPicker()"><i class="fas fa-images"></i> Chọn từ ảnh của bạn</button>
+                    </div>
+                </div>
             </div>
             
             <div class="container">
@@ -25,7 +34,7 @@
                         <div class="profile-avatar-circle">
                             <img src="assets/default-avatar.svg" id="user-avatar-big" alt="Avatar">
                         </div>
-                        <button class="btn-change-avatar" id="btn-change-avatar" title="Đổi ảnh đại diện">📷</button>
+                        <button class="btn-change-avatar" id="btn-change-avatar" title="Đổi ảnh đại diện"><i class="fas fa-camera"></i></button>
                     </div>
 
                     <div class="profile-header-details">
@@ -101,6 +110,62 @@
     </main>
 
 
+
+    <div id="photo-picker-modal" class="modal-overlay" style="display:none;">
+        <div class="modal-content photo-picker-card">
+            <div class="modal-header">
+                <h3>Chọn ảnh của bạn</h3>
+                <button class="btn-close-modal" onclick="UserProfile.closePhotoPicker()">×</button>
+            </div>
+            <div class="photo-picker-grid" id="photo-picker-grid">
+                <!-- Images will be injected here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Profile Modal -->
+    <div id="edit-profile-modal" class="modal-overlay" style="display:none;">
+        <div class="modal-content edit-profile-card">
+            <div class="modal-header">
+                <h3>Chỉnh sửa hồ sơ</h3>
+                <button class="btn-close-modal" onclick="UserProfile.closeEditModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <!-- Cover Preview -->
+                <div class="edit-modal-cover-preview" id="modal-cover-preview">
+                    <button class="btn-modal-action" onclick="document.getElementById('cover-input').click()"><i class="fas fa-camera"></i> Thay đổi ảnh bìa</button>
+                    <button class="btn-modal-action" onclick="UserProfile.openPhotoPicker(true)"><i class="fas fa-images"></i> Chọn từ ảnh cũ</button>
+                </div>
+                
+                <!-- Avatar Preview -->
+                <div class="edit-modal-avatar-section">
+                    <div class="edit-modal-avatar-wrapper">
+                        <img src="assets/default-avatar.svg" id="modal-avatar-preview">
+                        <button class="btn-change-avatar-modal" onclick="document.getElementById('avatar-input').click()"><i class="fas fa-camera"></i></button>
+                    </div>
+                </div>
+
+                <!-- Fields -->
+                <div class="edit-modal-fields">
+                    <div class="input-group">
+                        <label>Tên hiển thị</label>
+                        <input type="text" id="modal-edit-name" placeholder="Tên của bạn">
+                    </div>
+                    <div class="input-group">
+                        <label>Tiểu sử</label>
+                        <textarea id="modal-edit-bio" placeholder="Mô tả về bản thân bạn..."></textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn--ghost" onclick="UserProfile.closeEditModal()">Hủy</button>
+                <button class="btn btn--primary" id="btn-save-modal" onclick="UserProfile.saveProfileFromModal()">💾 Lưu thay đổi</button>
+            </div>
+        </div>
+    </div>
+
+    <input type="file" id="avatar-input" hidden accept="image/*">
+    <input type="file" id="cover-input" hidden accept="image/*">
 
     <script src="SharedUI.js"></script>
     <script src="profile.js"></script>

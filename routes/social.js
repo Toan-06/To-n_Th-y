@@ -22,8 +22,8 @@ const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, path.join(__dirname, '..', 'uploads')),
   filename: (req, file, cb) => cb(null, `social_${Date.now()}_${Math.random().toString(36).slice(2)}${path.extname(file.originalname)}`)
 });
-const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 }, fileFilter: (req, file, cb) => {
-  const allowed = /jpeg|jpg|png|gif|webp|mp4|webm/;
+const upload = multer({ storage, limits: { fileSize: 20 * 1024 * 1024 }, fileFilter: (req, file, cb) => {
+  const allowed = /jpeg|jpg|png|gif|webp|mp4|webm|mp3|wav|ogg|m4a|aac/;
   cb(null, allowed.test(path.extname(file.originalname).toLowerCase()));
 }});
 
@@ -40,6 +40,168 @@ async function resolveUserId(idStr) {
   if (result) resolveCache.set(idStr, result);
   return result;
 }
+
+// ==========================================
+// STORIES ROUTES (MOVED TO TOP)
+// ==========================================
+
+router.get('/stories', auth, async (req, res) => {
+  try {
+    const realId = await resolveUserId(req.user.id);
+    const friends = await Friendship.find({ $or: [{ requester: realId, status: 'accepted' }, { recipient: realId, status: 'accepted' }] });
+    const friendIds = friends.map(f => f.requester.toString() === realId ? f.recipient : f.requester);
+    friendIds.push(realId);
+
+    const stories = await Story.find({ 
+      userId: { $in: friendIds },
+      createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }
+    }).populate('userId', 'name displayName avatar').sort({ createdAt: -1 });
+
+    const formattedStories = stories.map(s => {
+      const obj = s.toObject();
+      if (s.userId && typeof s.userId === 'object') {
+        obj.user = {
+          _id: s.userId._id,
+          name: s.userId.name,
+          displayName: s.userId.displayName,
+          avatar: s.userId.avatar
+        };
+      }
+      obj.likeCount = s.likes ? s.likes.length : 0;
+      obj.isLiked = s.likes ? s.likes.some(id => id.toString() === realId) : false;
+      return obj;
+    });
+
+    res.json({ success: true, data: formattedStories });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+router.post('/stories', auth, upload.single('media'), async (req, res) => {
+  try {
+    const realId = await resolveUserId(req.user.id);
+    if (!req.file) return res.status(400).json({ success: false, message: 'Vui lòng chọn ảnh hoặc video' });
+
+    const media = {
+      url: `/uploads/${req.file.filename}`,
+      type: req.file.mimetype.startsWith('video') ? 'video' : (req.file.mimetype.startsWith('audio') ? 'audio' : 'image')
+    };
+    
+    const storyData = {
+      userId: realId,
+      media: [media],
+      duration: req.body.duration || 5000,
+      filter: req.body.filter || '',
+      flipped: req.body.flipped === 'true' || req.body.flipped === true,
+      objectFit: req.body.objectFit || 'contain'
+    };
+
+    if (req.body.stickers) {
+      try { storyData.stickers = JSON.parse(req.body.stickers); } catch (e) {}
+    }
+
+    if (req.body.musicName) {
+      storyData.music = {
+        name: req.body.musicName,
+        author: req.body.musicAuthor || 'Nhiều tác giả',
+        url: req.body.musicUrl || ''
+      };
+    }
+
+    if (req.body.textOverlay) {
+      storyData.textOverlay = {
+        content: req.body.textOverlay,
+        color: req.body.textColor || '#ffffff',
+        top: req.body.textTop || '50%',
+        left: req.body.textLeft || '50%'
+      };
+    }
+
+    const story = new Story(storyData);
+    await story.save();
+    res.json({ success: true, data: { ...story.toObject(), likeCount: 0, isLiked: false } });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// THẢ TIM STORY
+router.post('/stories/:id/like', auth, async (req, res) => {
+  try {
+    const realId = await resolveUserId(req.user.id);
+    const story = await Story.findById(req.params.id);
+    if (!story) return res.status(404).json({ success: false, message: 'Không tìm thấy thước phim' });
+
+    const index = story.likes.indexOf(realId);
+    if (index > -1) { story.likes.splice(index, 1); } else { story.likes.push(realId); }
+
+    await story.save();
+    res.json({ success: true, isLiked: index === -1, likeCount: story.likes.length });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// PHẢN HỒI STORY QUA TIN NHẮN (DM REPLY) - UNIQUE ROUTE
+router.post('/reply-to-story/:id', auth, async (req, res) => {
+  try {
+    const realId = await resolveUserId(req.user.id);
+    const { content } = req.body;
+    if (!content) return res.status(400).json({ success: false, message: 'Nội dung phản hồi trống' });
+
+    const story = await Story.findById(req.params.id);
+    if (!story) return res.status(404).json({ success: false, message: `Không tìm thấy thước phim ID: ${req.params.id}` });
+
+    const recipientId = story.userId.toString();
+    if (recipientId === realId) return res.status(400).json({ success: false, message: 'Bạn không thể phản hồi tin của chính mình' });
+
+    // Tạo tin nhắn DM
+    const ids = [String(realId), String(recipientId)].sort();
+    const conversationId = `dm_${ids[0]}_${ids[1]}`;
+    
+    const storyMediaUrl = story.media?.[0]?.url || '';
+    const msgText = `💬 Đã phản hồi thước phim của bạn: "${content}"`;
+    
+    const msg = new Message({
+      conversationId,
+      senderId: realId,
+      senderName: req.user.displayName || req.user.name,
+      senderAvatar: req.user.avatar || '',
+      text: msgText,
+      readBy: [realId],
+      storyRef: { id: story._id, mediaUrl: storyMediaUrl }
+    });
+    await msg.save();
+
+    // Socket emit
+    const senderData = {
+      senderId: realId,
+      senderCustomId: req.user.customId || req.user.id,
+      senderName: req.user.displayName || req.user.name,
+      senderAvatar: req.user.avatar || '',
+      text: msgText,
+      conversationId,
+      createdAt: msg.createdAt,
+      storyRef: { id: story._id, mediaUrl: storyMediaUrl }
+    };
+
+    emitToUser(recipientId, 'receive_message', senderData);
+    
+    // Also send as notification for better visibility
+    emitToUser(recipientId, 'notification', {
+      type: 'story_reply',
+      senderName: req.user.displayName || req.user.name,
+      message: msgText,
+      relatedId: story._id
+    });
+
+    res.json({ success: true, message: 'Đã gửi tin nhắn phản hồi' });
+  } catch (err) {
+    console.error("Story reply error:", err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
 
 // 1. LIKE / FAVORITE một dịch vụ
 router.post('/like', auth, async (req, res) => {
@@ -187,12 +349,17 @@ router.post('/notifications/read', auth, async (req, res) => {
 router.post('/posts', auth, async (req, res) => {
   try {
     const realId = await resolveUserId(req.user.id);
-    const { content, media, location } = req.body;
+    const { content, media, location, attachment } = req.body;
     const post = new Post({
       userId: realId, 
       userName: req.user.displayName || req.user.name, 
       userAvatar: req.user.avatar || '',
-      content, media: media || [], location: location || null
+      content, 
+      media: media || [], 
+      mediaLayout: req.body.mediaLayout || 'grid',
+      location: location || null,
+      attachment: attachment || undefined,
+      isPublic: req.body.visibility === 'public'
     });
     await post.save();
     const populatedPost = await Post.findById(post._id).populate('userId', 'name displayName avatar rank rankTier');
@@ -422,6 +589,27 @@ router.delete('/posts/:id', auth, async (req, res) => {
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
 
+// 13b. CHỈNH SỬA BÀI VIẾT
+router.put('/posts/:id', auth, async (req, res) => {
+  try {
+    const realId = await resolveUserId(req.user.id);
+    const post = await Post.findById(req.params.id);
+    if (!post) return res.status(404).json({ success: false, message: 'Không tìm thấy bài viết' });
+    if (post.userId.toString() !== realId) return res.status(403).json({ success: false, message: 'Không có quyền chỉnh sửa' });
+    
+    const { content, location, attachment, visibility } = req.body;
+    
+    post.content = content !== undefined ? content : post.content;
+    if (location !== undefined) post.location = location;
+    if (attachment !== undefined) post.attachment = attachment;
+    if (visibility !== undefined) post.isPublic = visibility === 'public';
+    
+    await post.save();
+    res.json({ success: true, post });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+
 // 14. TÌM KIẾM NGƯỜI DÙNG (tên + ID)
 router.get('/users/search', auth, async (req, res) => {
   try {
@@ -456,14 +644,27 @@ router.get('/posts/:id', auth, async (req, res) => {
 router.post('/posts/media', auth, upload.array('media', 5), async (req, res) => {
   try {
     const realId = await resolveUserId(req.user.id);
-    const media = (req.files || []).map(f => ({ url: `/uploads/${f.filename}`, type: f.mimetype.startsWith('video') ? 'video' : 'image' }));
+    const media = (req.files || []).map(f => {
+      let type = 'image';
+      if (f.mimetype.startsWith('video')) type = 'video';
+      else if (f.mimetype.startsWith('audio')) type = 'audio';
+      return { url: `/uploads/${f.filename}`, type };
+    });
+    
+    let attachmentData;
+    try {
+      if (req.body.attachment) attachmentData = JSON.parse(req.body.attachment);
+    } catch(e) {}
+
     const post = new Post({ 
       userId: realId, 
       userName: req.user.displayName || req.user.name, 
       userAvatar: req.user.avatar || '', 
       content: req.body.content || '', 
       media, 
-      location: req.body.locationName ? { name: req.body.locationName } : null 
+      location: req.body.locationName ? { name: req.body.locationName } : null,
+      attachment: attachmentData,
+      isPublic: req.body.visibility === 'public'
     });
     await post.save();
     const populatedPost = await Post.findById(post._id).populate('userId', 'name displayName avatar rank rankTier');
@@ -585,107 +786,12 @@ router.post('/groups/:id/leave', auth, async (req, res) => { try { const realId 
 router.get('/users/:id', auth, async (req, res) => {
   try {
     const targetId = await resolveUserId(req.params.id);
-    const user = await User.findById(targetId || req.params.id).select('name displayName avatar rank rankTier points customId notes createdAt lastActive').lean();
+    const user = await User.findById(targetId || req.params.id).select('name displayName avatar cover rank rankTier points customId notes createdAt lastActive').lean();
     if (!user) return res.status(404).json({ message: 'Không tìm thấy người dùng' });
     const postCount = await Post.countDocuments({ userId: user._id });
     const friendCount = await Friendship.countDocuments({ $or: [{ requester: user._id }, { recipient: user._id }], status: 'accepted' });
     res.json({ success: true, data: { ...user, postCount, friendCount } });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
-});
-
-// 30. STORIES ROUTES
-router.get('/stories', auth, async (req, res) => {
-  try {
-    const realId = await resolveUserId(req.user.id);
-    // Lấy stories của bản thân và bạn bè trong 24h qua
-    const friends = await Friendship.find({ $or: [{ requester: realId, status: 'accepted' }, { recipient: realId, status: 'accepted' }] });
-    const friendIds = friends.map(f => f.requester.toString() === realId ? f.recipient : f.requester);
-    friendIds.push(realId);
-
-    const stories = await Story.find({ 
-      userId: { $in: friendIds },
-      createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }
-    }).populate('userId', 'name displayName avatar').sort({ createdAt: -1 });
-
-    const formattedStories = stories.map(s => {
-      const obj = s.toObject();
-      if (s.userId && typeof s.userId === 'object') {
-        obj.user = {
-          _id: s.userId._id,
-          name: s.userId.name,
-          displayName: s.userId.displayName,
-          avatar: s.userId.avatar
-        };
-      }
-      obj.likeCount = s.likes ? s.likes.length : 0;
-      obj.isLiked = s.likes ? s.likes.some(id => id.toString() === realId) : false;
-      return obj;
-    });
-
-    res.json({ success: true, data: formattedStories });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
-
-router.post('/stories', auth, upload.single('media'), async (req, res) => {
-  try {
-    const realId = await resolveUserId(req.user.id);
-    if (!req.file) return res.status(400).json({ success: false, message: 'Vui lòng chọn ảnh hoặc video' });
-
-    const media = {
-      url: `/uploads/${req.file.filename}`,
-      type: req.file.mimetype.startsWith('video') ? 'video' : 'image'
-    };
-
-    const storyData = {
-      userId: realId,
-      media: [media]
-    };
-
-    if (req.body.musicName) {
-      storyData.music = {
-        name: req.body.musicName,
-        author: req.body.musicAuthor || 'Nhiều tác giả',
-        url: req.body.musicUrl || ''
-      };
-    }
-
-    if (req.body.textOverlay) {
-      storyData.textOverlay = {
-        content: req.body.textOverlay,
-        color: req.body.textColor || '#ffffff',
-        top: req.body.textTop || '50%',
-        left: req.body.textLeft || '50%'
-      };
-    }
-
-    const story = new Story(storyData);
-    await story.save();
-    res.json({ success: true, data: { ...story.toObject(), likeCount: 0, isLiked: false } });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
-
-router.post('/stories/:id/like', auth, async (req, res) => {
-  try {
-    const realId = await resolveUserId(req.user.id);
-    const story = await Story.findById(req.params.id);
-    if (!story) return res.status(404).json({ message: 'Không tìm thấy thước phim' });
-
-    const index = story.likes.indexOf(realId);
-    if (index > -1) {
-      story.likes.splice(index, 1);
-    } else {
-      story.likes.push(realId);
-    }
-
-    await story.save();
-    res.json({ success: true, liked: index === -1, count: story.likes.length });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
-  }
 });
 
 // GET /api/social/search - Global search
@@ -793,6 +899,15 @@ router.delete('/posts/:id/reaction', auth, async (req, res) => {
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
+});
+
+// FALLBACK DEBUG ROUTE
+router.use((req, res) => {
+  res.status(404).json({ 
+    success: false, 
+    message: `API Route not found in social.js: ${req.method} ${req.originalUrl}`,
+    hint: "Check social.js mounting and route definitions"
+  });
 });
 
 module.exports = router;

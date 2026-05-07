@@ -19,10 +19,11 @@ const PORT = 3000;
 const app = express();
 app.set('trust proxy', true);
 
-app.use((req, res, next) => {
-    console.log('>>> [RAW] Request:', req.method, req.url);
-    next();
-});
+// Bỏ log request raw để terminal gọn hơn (chỉ hiện info chính)
+// app.use((req, res, next) => {
+//     console.log('>>> [RAW] Request:', req.method, req.url);
+//     next();
+// });
 
 app.use(compression()); // Bật nén dữ liệu
 app.use(cors({ origin: true, credentials: true }));
@@ -63,6 +64,7 @@ app.use('/api/social', require('./routes/social'));
 app.use('/api/public', require('./routes/public'));
 app.use('/api/bookings', require('./routes/bookings'));
 app.use('/api/payments', require('./routes/payments'));
+
 
 // Static User Web
 app.use(express.static(path.join(__dirname, 'apps/user-web')));

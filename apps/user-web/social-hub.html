@@ -9,6 +9,9 @@
     <link rel="stylesheet" href="social-hub.css">
     <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <!-- Leaflet Map -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body class="social-hub-page">
     <header class="site-header" id="header-container"></header>
@@ -53,6 +56,12 @@
 
             <!-- Center Feed -->
             <section class="social-center">
+                <!-- Mobile/Global Search Bar (Visible on mobile or in center panel when sidebar is hidden) -->
+                <div class="search-card center-search-bar">
+                    <i class="fas fa-search search-icon"></i>
+                    <input type="text" class="global-search-input" placeholder="Tìm kiếm người dùng, bài viết, địa điểm...">
+                    <div class="search-results-overlay" style="display:none"></div>
+                </div>
                 <!-- Tab: Feed -->
                 <div class="tab-panel" id="panel-feed">
                     <!-- Post Box -->
@@ -188,11 +197,72 @@
                 <button class="modal__close" id="close-post-modal">&times;</button>
             </div>
             <div class="modal__body">
+                <div class="post-modal-user">
+                    <img src="assets/default-avatar.svg" alt="User" id="modal-post-avatar" class="avatar-sm">
+                    <div>
+                        <strong id="modal-post-name">Đang tải...</strong>
+                        <div class="post-audience-selector" id="privacy-trigger">
+                            <i class="fas fa-globe-americas"></i>
+                            <span id="audience-selected" data-value="public">Công khai</span>
+                            <i class="fas fa-chevron-down"></i>
+                        </div>
+                        <div class="dropdown-options" id="privacy-options" style="display:none;">
+                            <div class="dropdown-option active" data-value="public"><i class="fas fa-globe-asia"></i> Công khai</div>
+                            <div class="dropdown-option" data-value="friends"><i class="fas fa-user-friends"></i> Bạn bè</div>
+                            <div class="dropdown-option" data-value="private"><i class="fas fa-lock"></i> Chỉ mình tôi</div>
+                        </div>
+                    </div>
+                </div>
                 <textarea id="post-content" placeholder="Chia sẻ trải nghiệm du lịch của bạn..." class="post-textarea"></textarea>
-                <div id="media-preview" class="media-preview-grid"></div>
+                
+                <!-- In-place Feature Containers (Suggested UX) -->
+                <div id="inline-map-picker" class="inline-feature-container" style="display: none;"></div>
+                <div id="inline-attach-picker" class="inline-feature-container" style="display: none;"></div>
+                
+                <div id="media-preview" class="media-preview-container"></div>
+                
                 <div class="post-modal-tools">
-                    <label class="tool-btn"><input type="file" id="media-upload" accept="image/*,video/*" multiple hidden>📸 Ảnh/Video</label>
-                    <button class="tool-btn" id="tag-location">📍 Gắn thẻ địa điểm</button>
+                    <label class="post-action-btn">
+                        <input type="file" id="media-upload" accept="image/*,video/*,audio/*" multiple hidden>
+                        <div class="action-icon" style="color:#10b981; background: rgba(16,185,129,0.1);">
+                            <i class="fas fa-images"></i>
+                        </div> 
+                        <span>Ảnh/Video</span>
+                    </label>
+                    <button class="post-action-btn" id="tag-location">
+                        <div class="action-icon" style="color:#f43f5e; background: rgba(244,63,94,0.1);">
+                            <i class="fas fa-map-marker-alt"></i>
+                        </div> 
+                        <span>Gắn thẻ</span>
+                    </button>
+                    <button class="post-action-btn" id="attach-trip">
+                        <div class="action-icon" style="color:#fbbf24; background: rgba(251,191,36,0.1);">
+                            <i class="fas fa-route"></i>
+                        </div> 
+                        <span>Đính kèm</span>
+                    </button>
+                </div>
+
+                <!-- Vùng hiển thị attachment (Vẫn giữ để hiển thị sau khi chọn) -->
+                <div id="attachment-preview-container" style="display:none; padding: 0.5rem; margin-top: 0.5rem; background: rgba(255,255,255,0.05); border-radius: 12px; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; align-items: center; gap: 0.75rem;">
+                        <span id="attachment-preview-icon" style="font-size: 1.5rem;">🎒</span>
+                        <div>
+                            <div id="attachment-preview-title" style="font-weight: 600; font-size: 0.95rem;"></div>
+                            <div id="attachment-preview-subtitle" style="font-size: 0.8rem; color: var(--text-muted);"></div>
+                        </div>
+                    </div>
+                    <button id="remove-attachment" style="background: none; border: none; color: #f43f5e; cursor: pointer; font-size: 1.2rem;">&times;</button>
+                </div>
+                <!-- Upload Progress -->
+                <div id="upload-progress-container" style="display:none; margin-top: 1rem;">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:5px; font-size:0.85rem;">
+                        <span id="upload-status">Đang tải lên...</span>
+                        <span id="upload-percent">0%</span>
+                    </div>
+                    <div style="height:6px; background:rgba(255,255,255,0.1); border-radius:3px; overflow:hidden;">
+                        <div id="upload-progress-bar" style="width:0%; height:100%; background:var(--accent-primary); transition:width 0.3s ease;"></div>
+                    </div>
                 </div>
             </div>
             <div style="padding:0 1.75rem 1.75rem;">
@@ -200,6 +270,64 @@
             </div>
         </div>
     </div>
+    <!-- Share Post Modal -->
+    <div id="share-modal" class="modal" style="display:none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 10030; align-items: center; justify-content: center; backdrop-filter: blur(5px);">
+        <div class="modal-content glass-card" style="width: 90%; max-width: 450px; padding: 0; display: flex; flex-direction: column;">
+            <div style="padding: 1.25rem 1.5rem; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="margin: 0; font-size: 1.1rem; color: #fff;">Chia sẻ bài viết</h3>
+                <button class="modal__close" onclick="document.getElementById('share-modal').style.display='none'">&times;</button>
+            </div>
+            <div style="padding: 1.5rem;">
+                <div id="share-preview-post" style="padding: 0.75rem; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; margin-bottom: 1.25rem; font-size: 0.85rem; color: var(--text-muted);">
+                    Đang tải bản xem trước...
+                </div>
+                <textarea id="share-comment" placeholder="Bạn đang nghĩ gì về bài viết này?" class="post-textarea" style="min-height: 100px; font-size: 0.9rem; background: rgba(255,255,255,0.05);"></textarea>
+            </div>
+            <div style="padding: 0 1.5rem 1.5rem;">
+                <button class="btn btn--primary btn--block" id="confirm-share-btn">Chia sẻ ngay</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Attach Modal -->
+    <div id="attach-modal" class="modal" style="display:none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 10010; align-items: center; justify-content: center; backdrop-filter: blur(5px);">
+        <div class="modal-content glass-card" style="width: 90%; max-width: 500px; padding: 0; display: flex; flex-direction: column; max-height: 80vh;">
+            <div style="padding: 1rem 1.5rem; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="margin: 0;">Thêm vào bài viết</h3>
+                <button class="modal__close" id="close-attach-modal">&times;</button>
+            </div>
+            <div class="attach-tabs" style="display: flex; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                <div class="attach-tab active" data-type="trips">Lịch trình</div>
+                <div class="attach-tab" data-type="tours">Tour du lịch</div>
+                <div class="attach-tab" data-type="places">Địa điểm đã lưu</div>
+            </div>
+            <div style="padding: 1rem; overflow-y: auto; flex: 1; min-height: 200px;">
+                <div id="attach-list" style="display: flex; flex-direction: column; gap: 10px;">
+                    <div style="text-align:center; color: var(--text-muted); padding: 1rem;">Đang tải...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Map Picker Modal -->
+    <div id="map-picker-modal" class="modal" style="display:none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 10020; align-items: center; justify-content: center; backdrop-filter: blur(5px);">
+        <div class="modal-content glass-card" style="width: 90%; max-width: 600px; padding: 0; overflow: hidden; display: flex; flex-direction: column;">
+            <div style="padding: 1rem 1.5rem; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="margin: 0;">Chọn vị trí trên bản đồ</h3>
+                <button class="modal__close" onclick="document.getElementById('map-picker-modal').style.display='none'">&times;</button>
+            </div>
+            <div style="height: 400px; background: #1e293b; position: relative;" id="map-picker-container">
+                <div id="leaflet-map" style="width: 100%; height: 100%;"></div>
+                <div class="map-center-marker"><i class="fas fa-map-marker-alt"></i></div>
+                <div style="position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--bg-elevated); padding: 10px 20px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); display: flex; align-items: center; gap: 12px; border: 1px solid rgba(255,255,255,0.1); width: 85%; z-index: 1000;">
+                    <i class="fas fa-location-dot" style="color: #f43f5e;"></i>
+                    <span id="map-picked-address" style="font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1;">Đang xác định vị trí...</span>
+                    <button class="btn btn--primary btn--sm" id="btn-confirm-map-loc" style="padding: 6px 16px; border-radius: 10px;">Chọn</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
 
     <!-- Chat Drawer -->
     <div class="chat-drawer" id="chat-drawer">

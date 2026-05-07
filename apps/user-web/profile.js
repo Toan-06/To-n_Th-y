@@ -37,16 +37,24 @@ const UserProfile = {
     loadData: async function () {
         const token = localStorage.getItem('wander_token');
         try {
-            // Load current user for 'me' context
-            const meRes = await fetch('/api/auth/user/me', { headers: { 'x-auth-token': token } });
+            // Load current user for 'me' context with cache-buster
+            const meRes = await fetch(`/api/auth/user/me?t=${Date.now()}`, { headers: { 'x-auth-token': token } });
             const meData = await meRes.json();
             if (meData.success) {
                 this.user = meData.user;
-                if (!this.profileUserId || this.profileUserId === this.user._id || this.profileUserId === this.user.id || this.profileUserId === this.user.customId) {
+                // Robust check if this is my own profile
+                const myId = this.user._id || this.user.id;
+                const myCustomId = this.user.customId;
+                
+                if (!this.profileUserId || 
+                    this.profileUserId === myId || 
+                    this.profileUserId === myCustomId || 
+                    this.profileUserId === "me") {
+                    
                     this.isOwnProfile = true;
-                    this.profileUserId = this.user._id || this.user.id;
+                    this.profileUserId = myId;
                     this.loadFullProfile();
-                    this.switchTab(this.activeTab); // Re-trigger content load with proper ID
+                    this.switchTab(this.activeTab);
                     return;
                 }
             }
@@ -55,7 +63,8 @@ const UserProfile = {
             if (this.profileUserId) {
                 this.isOwnProfile = false;
                 await this.loadOtherProfile(this.profileUserId);
-                this.switchTab(this.activeTab); // Ensure content loads with resolved ID
+                await this.checkFriendshipStatus(this.profileUserId); // NEW: Check friendship status
+                this.switchTab(this.activeTab);
             }
         } catch (err) {
             console.error("Error loading profile data:", err);
@@ -104,10 +113,12 @@ const UserProfile = {
 
         // Cover
         const coverEl = document.getElementById('profile-cover-bg');
-        if (this.user.cover) {
-            coverEl.style.backgroundImage = `url(${this.user.cover})`;
-        } else {
-            coverEl.style.backgroundImage = "url('https://images.unsplash.com/photo-1502920917128-1aa500764cbd?q=80&w=2000')";
+        if (coverEl) {
+            if (this.user.cover) {
+                coverEl.style.backgroundImage = `url("${this.user.cover}")`;
+            } else {
+                coverEl.style.backgroundImage = "url('https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?q=80&w=2000')";
+            }
         }
 
         // Action Buttons
@@ -119,12 +130,28 @@ const UserProfile = {
         // Sidebar Info
         const joinDate = new Date(this.user.createdAt || Date.now());
         document.getElementById('user-joined').textContent = `${joinDate.getMonth() + 1}/${joinDate.getFullYear()}`;
+        
+        // Show friend and post counts
+        const statsHtml = `
+            <li id="stat-friend-count"><span>👥 Bạn bè</span> <strong>${this.user.friendCount || 0}</strong></li>
+            <li id="stat-post-count"><span>📝 Bài viết</span> <strong>${this.user.postCount || 0}</strong></li>
+        `;
+        const infoList = document.querySelector('.info-list');
+        if (infoList) {
+            // Clear existing extra stats if any to prevent duplicates
+            const existingFriends = document.getElementById('stat-friend-count');
+            const existingPosts = document.getElementById('stat-post-count');
+            if (existingFriends) existingFriends.remove();
+            if (existingPosts) existingPosts.remove();
+
+            const joinedLi = infoList.querySelector('li:nth-child(2)');
+            if (joinedLi) {
+                joinedLi.insertAdjacentHTML('afterend', statsHtml);
+            }
+        }
 
         // Helper visibility
-        const coverBtn = document.getElementById('btn-edit-cover');
-        if (coverBtn) coverBtn.style.display = 'flex';
-        const avatarBtn = document.getElementById('btn-change-avatar');
-        if (avatarBtn) avatarBtn.style.display = 'flex';
+        // Camera buttons are now managed by toggleEditMode
 
         if (window.WanderUI && window.WanderUI.finishTopLoader) window.WanderUI.finishTopLoader();
     },
@@ -161,6 +188,20 @@ const UserProfile = {
                 const joinDate = new Date(u.createdAt || Date.now());
                 document.getElementById('user-joined').textContent = `${joinDate.getMonth() + 1}/${joinDate.getFullYear()}`;
 
+                // NEW: Show friend and post counts
+                const statsHtml = `
+                    <li id="stat-friend-count"><span>👥 Bạn bè</span> <strong>${u.friendCount || 0}</strong></li>
+                    <li id="stat-post-count"><span>📝 Bài viết</span> <strong>${u.postCount || 0}</strong></li>
+                `;
+                const infoList = document.querySelector('.info-list');
+                if (infoList) {
+                    // Keep original joined and location, append stats
+                    const joinedLi = infoList.querySelector('li:nth-child(2)');
+                    if (joinedLi) {
+                        joinedLi.insertAdjacentHTML('afterend', statsHtml);
+                    }
+                }
+
                 // Hide edit, show social buttons
                 const editBtn = document.getElementById('edit-profile-btn');
                 if (editBtn) editBtn.style.display = 'none';
@@ -170,9 +211,8 @@ const UserProfile = {
                 // Hide camera buttons
                 const coverBtn = document.getElementById('btn-edit-cover');
                 if (coverBtn) coverBtn.style.display = 'none';
-                const avatarBtn = document.getElementById('btn-change-avatar');
-                if (u.avatar) document.getElementById('user-avatar').src = u.avatar;
-                if (u.coverImage) document.getElementById('profile-cover').src = u.coverImage;
+                if (u.avatar) document.getElementById('user-avatar-big').src = u.avatar;
+                if (u.cover) document.getElementById('profile-cover-bg').style.backgroundImage = `url(${u.cover})`;
             }
             if (window.WanderUI && window.WanderUI.finishTopLoader) window.WanderUI.finishTopLoader();
         } catch (err) {
@@ -248,9 +288,7 @@ const UserProfile = {
         if (editBtn) {
             editBtn.onclick = (e) => {
                 e.preventDefault();
-                console.log("Edit button clicked, isEditing:", this.isEditing);
-                if (this.isEditing) this.saveProfile();
-                else this.toggleEditMode(true);
+                this.toggleEditMode(true);
             };
         }
 
@@ -263,15 +301,6 @@ const UserProfile = {
                 document.getElementById('avatar-input').click();
             };
         }
-        const coverBtn = document.getElementById('btn-edit-cover');
-        if (coverBtn) {
-            coverBtn.onclick = (e) => {
-                e.preventDefault();
-                console.log("Cover cam clicked");
-                document.getElementById('cover-input').click();
-            };
-        }
-
         // Hidden input listeners
         const avatarIn = document.getElementById('avatar-input');
         const coverIn = document.getElementById('cover-input');
@@ -290,106 +319,173 @@ const UserProfile = {
         if (msgBtn) {
             msgBtn.onclick = () => { window.location.href = `social-hub.html?tab=messages&chat=${this.profileUserId}`; };
         }
+
+        // Cover Edit Dropdown Toggle
+        const coverBtn = document.getElementById('btn-edit-cover');
+        const coverMenu = document.getElementById('cover-edit-menu');
+        if (coverBtn && coverMenu) {
+            coverBtn.onclick = (e) => {
+                e.stopPropagation();
+                coverMenu.classList.toggle('show');
+            };
+        }
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            if (coverMenu && !coverMenu.contains(e.target) && e.target !== coverBtn) {
+                coverMenu.classList.remove('show');
+            }
+        });
     },
 
-    isEditing: false,
-    toggleEditMode: function (active) {
-        this.isEditing = active;
-        const nameEl = document.getElementById('user-display-name');
-        const bioEl = document.getElementById('user-bio');
-        const editBtn = document.getElementById('edit-profile-btn');
+    openPhotoPicker: async function (forModal = false) {
+        const modal = document.getElementById('photo-picker-modal');
+        const grid = document.getElementById('photo-picker-grid');
+        const menu = document.getElementById('cover-edit-menu');
+        
+        if (menu) menu.classList.remove('show');
+        if (!modal || !grid) return;
 
-        if (!nameEl || !bioEl || !editBtn) return;
+        modal.style.display = 'flex';
+        grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text-muted);">Đang tìm ảnh từ các bài viết của bạn...</div>';
 
-        if (active) {
-            const currentName = nameEl.textContent;
-            const currentBio = bioEl.textContent === 'Chưa có tiểu sử.' ? '' : bioEl.textContent;
+        try {
+            const res = await fetch(`/api/social/posts/user/${this.profileUserId}`, {
+                headers: { 'x-auth-token': localStorage.getItem('wander_token') }
+            });
+            const data = await res.json();
+            
+            if (data.success) {
+                const images = [];
+                data.data.forEach(post => {
+                    if (post.media) post.media.forEach(m => images.push(m.url));
+                });
 
-            nameEl.innerHTML = `<input type="text" id="edit-name-input" value="${currentName}" class="inline-edit-input" placeholder="Tên hiển thị">`;
-            bioEl.innerHTML = `<textarea id="edit-bio-input" class="inline-edit-textarea" placeholder="Nhập tiểu sử của bạn...">${currentBio}</textarea>`;
-
-            editBtn.innerHTML = '💾 Lưu thay đổi';
-            editBtn.classList.add('btn-saving');
-
-            if (!document.getElementById('cancel-edit-btn')) {
-                const cancelBtn = document.createElement('button');
-                cancelBtn.id = 'cancel-edit-btn';
-                cancelBtn.className = 'btn btn--ghost';
-                cancelBtn.style.marginLeft = '12px';
-                cancelBtn.style.borderRadius = '14px';
-                cancelBtn.innerHTML = 'Hủy';
-                cancelBtn.onclick = (e) => {
-                    e.preventDefault();
-                    this.toggleEditMode(false);
-                };
-                editBtn.parentNode.appendChild(cancelBtn);
+                if (images.length === 0) {
+                    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text-muted);">Bạn chưa đăng bài viết nào có ảnh.</div>';
+                } else {
+                    grid.innerHTML = images.map(url => `
+                        <div class="photo-picker-item" onclick="UserProfile.selectPhoto('${url}', ${forModal})">
+                            <img src="${url}" alt="User content">
+                        </div>
+                    `).join('');
+                }
             }
-        } else {
-            this.loadFullProfile();
-            editBtn.innerHTML = '✏️ Chỉnh sửa hồ sơ';
-            editBtn.classList.remove('btn-saving');
-            const cancelBtn = document.getElementById('cancel-edit-btn');
-            if (cancelBtn) cancelBtn.remove();
-
-            const avatarIn = document.getElementById('avatar-input');
-            const coverIn = document.getElementById('cover-input');
-            if (avatarIn) avatarIn.value = '';
-            if (coverIn) coverIn.value = '';
+        } catch (err) {
+            grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:#ff4d4d;">Không thể tải danh sách ảnh.</div>';
         }
     },
 
-    handleImageChange: async function (e, type) {
-        const file = e.target.files[0];
-        if (!file) return;
+    closePhotoPicker: function () {
+        const modal = document.getElementById('photo-picker-modal');
+        if (modal) modal.style.display = 'none';
+    },
 
-        if (file.size > 2 * 1024 * 1024) {
-            alert("Ảnh quá lớn! Vui lòng chọn ảnh dưới 2MB.");
-            e.target.value = '';
+    selectPhoto: async function (url, forModal = false) {
+        if (!url) return;
+        
+        if (forModal) {
+            // Update modal preview only
+            const coverPrev = document.getElementById('modal-cover-preview');
+            if (coverPrev) coverPrev.style.backgroundImage = `url(${url})`;
+            this.tempSelectedCover = url;
+            this.closePhotoPicker();
             return;
         }
 
-        console.log(`Previewing ${type}: ${file.name}`);
-        // Preview immediately
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-            if (type === 'avatar') {
-                const img = document.getElementById('user-avatar-big');
-                if (img) img.src = ev.target.result;
-            } else {
-                const cover = document.getElementById('profile-cover-bg');
-                if (cover) cover.style.backgroundImage = `url(${ev.target.result})`;
+        // Direct save (if used outside modal)
+        if (window.WanderUI) window.WanderUI.showToast("Đang cập nhật ảnh bìa...", "info");
+        try {
+            const res = await fetch('/api/auth/profile', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'x-auth-token': localStorage.getItem('wander_token') },
+                body: JSON.stringify({ cover: url })
+            });
+            const data = await res.json();
+            if (data.success) {
+                if (window.WanderUI) window.WanderUI.showToast("Đã thay đổi ảnh bìa!", "success");
+                this.user.cover = url;
+                this.loadFullProfile();
+                this.closePhotoPicker();
             }
-        };
-        reader.readAsDataURL(file);
-
-        // If not in editing mode, start it
-        if (!this.isEditing) this.toggleEditMode(true);
+        } catch (err) {
+            console.error(err);
+        }
     },
 
-    saveProfile: async function () {
-        const nameInput = document.getElementById('edit-name-input');
-        const bioInput = document.getElementById('edit-bio-input');
+    isEditing: false,
+    
+    toggleEditMode: function (active) {
+        if (!active) {
+            this.closeEditModal();
+            return;
+        }
+
+        const modal = document.getElementById('edit-profile-modal');
+        if (!modal) return;
+
+        this.isEditing = true;
+        modal.style.display = 'flex';
+
+        // Populate Modal Fields
+        const nameInput = document.getElementById('modal-edit-name');
+        const bioInput = document.getElementById('modal-edit-bio');
+        if (nameInput) nameInput.value = this.user.displayName || this.user.name || '';
+        if (bioInput) bioInput.value = this.user.notes || '';
+        
+        // Populate Previews
+        const avatarPrev = document.getElementById('modal-avatar-preview');
+        if (avatarPrev) avatarPrev.src = this.user.avatar || 'assets/default-avatar.svg';
+        
+        const coverPrev = document.getElementById('modal-cover-preview');
+        if (coverPrev) {
+            const coverUrl = this.user.cover || 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?q=80&w=2000';
+            coverPrev.style.backgroundImage = `url(${coverUrl})`;
+        }
+    },
+
+    closeEditModal: function () {
+        this.isEditing = false;
+        const modal = document.getElementById('edit-profile-modal');
+        if (modal) modal.style.display = 'none';
+        
+        // Reset file inputs
         const avatarInput = document.getElementById('avatar-input');
         const coverInput = document.getElementById('cover-input');
+        if (avatarInput) avatarInput.value = '';
+        if (coverInput) coverInput.value = '';
+        this.tempSelectedCover = null;
+    },
 
-        const editBtn = document.getElementById('edit-profile-btn');
-        const originalHtml = editBtn.innerHTML;
-        editBtn.innerHTML = '⌛ Đang lưu...';
-        editBtn.disabled = true;
+    saveProfileFromModal: async function () {
+        const name = document.getElementById('modal-edit-name')?.value.trim();
+        const bio = document.getElementById('modal-edit-bio')?.value.trim();
+        const avatarIn = document.getElementById('avatar-input');
+        const coverIn = document.getElementById('cover-input');
+        const saveBtn = document.getElementById('btn-save-modal');
+
+        if (!saveBtn) return;
+
+        const originalHtml = saveBtn.innerHTML;
+        saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Đang lưu...';
+        saveBtn.disabled = true;
 
         try {
-            const payload = {
-                displayName: nameInput ? nameInput.value.trim() : this.user.displayName,
-                notes: bioInput ? bioInput.value.trim() : this.user.notes
-            };
+            const payload = { displayName: name, notes: bio };
 
-            // Handle images if any
-            if (avatarInput.files[0]) {
-                payload.avatar = await this.toBase64(avatarInput.files[0]);
+            if (avatarIn && avatarIn.files[0]) {
+                payload.avatar = await this.toBase64(avatarIn.files[0]);
             }
-            if (coverInput.files[0]) {
-                payload.cover = await this.toBase64(coverInput.files[0]);
+            
+            if (this.tempSelectedCover) {
+                payload.cover = this.tempSelectedCover;
+            } else if (coverIn && coverIn.files[0]) {
+                payload.cover = await this.toBase64(coverIn.files[0]);
             }
+
+            // Optimistic update
+            Object.assign(this.user, payload);
+            this.loadFullProfile();
 
             const res = await fetch('/api/auth/profile', {
                 method: 'PUT',
@@ -399,26 +495,54 @@ const UserProfile = {
             const data = await res.json();
 
             if (data.success) {
-                if (window.WanderUI) window.WanderUI.showToast("Đã lưu hồ sơ!", "success");
-                this.user = Object.assign(this.user, payload);
-                this.toggleEditMode(false);
+                if (window.WanderUI) window.WanderUI.showToast("Cập nhật hồ sơ thành công!", "success");
+                
+                // Final sync with server data
+                Object.assign(this.user, data.user);
+                
+                // Update local storage to prevent stale data on reload
+                localStorage.setItem('wander_user', JSON.stringify(this.user));
 
-                // Re-render current tab to update avatars in posts
-                this.switchTab(this.activeTab);
-
-                // Refresh global header avatar
+                this.loadFullProfile();
+                this.closeEditModal();
+                
                 if (typeof window.refreshAuthUI === 'function') window.refreshAuthUI();
-                else if (typeof syncAuthUI === 'function') syncAuthUI();
             } else {
                 alert(data.message || "Lỗi khi lưu");
+                // Revert or refresh
+                this.loadUserInfo();
             }
         } catch (err) {
             console.error(err);
             alert("Lỗi kết nối máy chủ");
         } finally {
-            editBtn.innerHTML = originalHtml;
-            editBtn.disabled = false;
+            saveBtn.innerHTML = originalHtml;
+            saveBtn.disabled = false;
         }
+    },
+
+    handleImageChange: async function (e, type) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        if (file.size > 5 * 1024 * 1024) {
+            alert("Ảnh quá lớn! Vui lòng chọn ảnh dưới 5MB.");
+            e.target.value = '';
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            if (type === 'avatar') {
+                const img = document.getElementById('modal-avatar-preview');
+                if (img) img.src = ev.target.result;
+            } else {
+                const cover = document.getElementById('modal-cover-preview');
+                if (cover) cover.style.backgroundImage = `url(${ev.target.result})`;
+                this.tempSelectedCover = null; 
+            }
+        };
+        reader.readAsDataURL(file);
     },
 
     toBase64: file => new Promise((resolve, reject) => {
@@ -432,6 +556,16 @@ const UserProfile = {
         this.activeTab = tab;
         const content = document.getElementById('profile-tab-content');
         if (!content) return;
+        
+        // Safety: If user data hasn't loaded yet, show loading state and wait for loadData to re-trigger
+        if (!this.user) {
+            content.innerHTML = `
+                <div class="shimmer-container" style="padding:20px;">
+                    <div class="loading-shimmer" style="height:150px;border-radius:20px;margin-bottom:20px;"></div>
+                </div>
+            `;
+            return;
+        }
 
         // Show non-blocking shimmer skeletons
         content.innerHTML = `
@@ -564,7 +698,7 @@ const UserProfile = {
 
     loadDiary: async function () {
         const content = document.getElementById('profile-tab-content');
-        if (!this.profileUserId) return;
+        if (!this.profileUserId || !this.user) return;
 
         let html = '';
 
@@ -621,9 +755,17 @@ const UserProfile = {
                             </div>
                             ${post.media?.length > 0 ? `
                                 <div class="post-media-grid" style="grid-template-columns: repeat(${Math.min(post.media.length, 2)}, 1fr);">
-                                    ${post.media.map(m => `
-                                        <img src="${m.url}" style="width:100%; max-height:500px; object-fit:cover; border-radius:20px;" onclick="UserProfile.viewImage('${m.url}')">
-                                    `).join('')}
+                                    ${post.media.map(m => {
+                                        if (m.type === 'image') return `<img src="${m.url}" style="width:100%; max-height:500px; object-fit:cover; border-radius:20px;" onclick="UserProfile.viewImage('${m.url}')">`;
+                                        if (m.type === 'video') return `<video src="${m.url}" controls style="width:100%; max-height:500px; border-radius:20px;"></video>`;
+                                        if (m.type === 'audio') return `
+                                            <div class="post-audio-card">
+                                                <div class="audio-wave"><span></span><span></span><span></span><span></span></div>
+                                                <audio src="${m.url}" controls></audio>
+                                            </div>
+                                        `;
+                                        return '';
+                                    }).join('')}
                                 </div>
                             ` : ''}
                             <div class="post-footer">

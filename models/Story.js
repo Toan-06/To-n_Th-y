@@ -9,8 +9,18 @@ const storySchema = new mongoose.Schema({
   },
   media: [{
     url: String,
-    type: { type: String, enum: ['image', 'video'], default: 'image' }
+    type: { type: String, enum: ['image', 'video', 'audio'], default: 'image' }
   }],
+  duration: { type: Number, default: 5000 },
+  filter: String,
+  flipped: { type: Boolean, default: false },
+  stickers: [{
+    content: String,
+    top: String,
+    left: String,
+    fontSize: String
+  }],
+  objectFit: { type: String, default: 'contain' },
   music: {
     name: String,
     author: String,
@@ -24,6 +34,11 @@ const storySchema = new mongoose.Schema({
   },
   viewers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   likes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  comments: [{
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    content: String,
+    createdAt: { type: Date, default: Date.now }
+  }],
   expiresAt: { type: Date, default: () => new Date(Date.now() + 24 * 60 * 60 * 1000), index: { expires: 0 } }, // Auto-delete after 24h
   createdAt: { type: Date, default: Date.now }
 });

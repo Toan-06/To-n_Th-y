@@ -11,6 +11,8 @@ const { calculateRank } = require('../utils/rankUtils');
 const Itinerary = require('../models/Itinerary');
 const Conversation = require('../models/Conversation');
 const Place = require('../models/Place');
+const Post = require('../models/Post');
+const Friendship = require('../models/Friendship');
 
 const JWT_SECRET = (process.env.JWT_SECRET || 'wander-viet-secret-key-123').trim();
 const DEFAULT_ADMIN_EMAIL = process.env.DEFAULT_ADMIN_EMAIL || 'admin@wanderviet.com';
@@ -61,6 +63,11 @@ function setInCache(id, portal, user) {
   authCache.set(key, { user, timestamp: Date.now() });
 }
 
+function clearAuthCache(id, portal) {
+  const key = `${portal}_${id}`;
+  authCache.delete(key);
+}
+
 const verifyPortalToken = (expectedPortal) => async (req, res, next) => {
   const token = req.header('x-auth-token');
   if (!token || token === 'null' || token === 'undefined') {
@@ -90,8 +97,9 @@ const verifyPortalToken = (expectedPortal) => async (req, res, next) => {
       return res.status(403).json({ success: false, message: `Auth: Portal mismatch (Expected ${expectedPortal}, got ${account.portal})` });
     }
 
-    // Try cache first
-    const cachedUser = getFromCache(accountId, account.portal || expectedPortal || 'user');
+    // Try cache first (skip if cache-buster 't' is present)
+    const skipCache = req.query.t || req.headers['x-skip-cache'];
+    const cachedUser = skipCache ? null : getFromCache(accountId, account.portal || expectedPortal || 'user');
     if (cachedUser) {
       req.user = cachedUser;
       return next();
@@ -140,7 +148,9 @@ const verifyPortalToken = (expectedPortal) => async (req, res, next) => {
         points: accountData.points || 0,
         rank: accountData.rank || 'Đồng',
         rankTier: accountData.rankTier || 'I',
-        claimedQuests: accountData.claimedQuests || []
+        claimedQuests: accountData.claimedQuests || [],
+        cover: accountData.cover || '',
+        notes: accountData.notes || ''
       };
       
       setInCache(accountId, account.portal || expectedPortal || 'user', req.user);
@@ -155,6 +165,8 @@ const verifyPortalToken = (expectedPortal) => async (req, res, next) => {
         displayName: account.displayName || account.name,
         name: account.name,
         avatar: account.avatar || '',
+        cover: account.cover || '',
+        notes: account.notes || '',
         portal: account.portal
       };
     }
@@ -285,9 +297,14 @@ router.post('/user/login', async (req, res) => {
 
 router.get('/user/me', auth, async (req, res) => {
   try {
-    // req.user is already populated by auth middleware
-    res.setHeader('Cache-Control', 'no-cache');
-    res.json({ success: true, user: req.user });
+    const realId = req.user._id || req.user.id;
+    const [friendCount, postCount] = await Promise.all([
+        Friendship.countDocuments({ $or: [{ requester: realId }, { recipient: realId }], status: 'accepted' }),
+        Post.countDocuments({ userId: realId })
+    ]);
+    
+    const userData = { ...req.user, friendCount, postCount };
+    res.json({ success: true, user: userData });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -642,28 +659,47 @@ router.post('/user/add-xp', auth, async (req, res) => {
 // Cập nhật hồ sơ user
 router.put('/profile', auth, async (req, res) => {
   try {
-    const { displayName, notes, avatar, phone, preferences } = req.body;
+    const { displayName, notes, avatar, cover, phone, preferences } = req.body;
     
+    const updateFields = {};
+    if (displayName !== undefined) updateFields.displayName = displayName;
+    if (notes !== undefined) updateFields.notes = notes;
+    if (avatar !== undefined) updateFields.avatar = avatar;
+    if (cover !== undefined) updateFields.cover = cover;
+    if (phone !== undefined) updateFields.phone = phone;
+    // Note: preferences merge is handled by the model or should be done carefully.
+    // For now, let's just allow partial updates if sent.
+    if (preferences !== undefined) updateFields.preferences = preferences;
+
+    // Direct find and update for maximum transparency
+    const searchId = req.user._id || req.user.id;
     let user = await User.findOne({
-      $or: [
-        { customId: req.user.id },
-        { id: req.user.id },
-        ...(mongoose.Types.ObjectId.isValid(req.user.id) ? [{ _id: req.user.id }] : [])
-      ]
+        $or: [
+            { _id: mongoose.Types.ObjectId.isValid(searchId) ? searchId : undefined },
+            { customId: req.user.id }
+        ].filter(q => q._id !== undefined || q.customId !== undefined)
     });
+
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
     
+    // Explicitly set each field
     if (displayName !== undefined) user.displayName = displayName;
     if (notes !== undefined) user.notes = notes;
     if (avatar !== undefined) user.avatar = avatar;
+    if (cover !== undefined) user.cover = cover;
     if (phone !== undefined) user.phone = phone;
-    if (preferences !== undefined) {
-      user.preferences = { ...user.preferences, ...preferences };
-    }
+    if (preferences !== undefined) user.preferences = { ...user.preferences, ...preferences };
 
     await user.save();
+    
+    // Clear cache
+    const possibleIds = [req.user.id, req.user._id, user.customId, user._id.toString()];
+    possibleIds.forEach(id => {
+      if (id) clearAuthCache(id, 'user');
+    });
+
     await logAction(user.email, user.role, 'USER_PROFILE_UPDATED', { changed: Object.keys(req.body) }, req.ip, req.headers['user-agent']);
-    res.json({ success: true, user });
+    res.json({ success: true, user: user.toObject() });
   } catch (err) {
     console.error(err.message);
     res.status(500).send('Server error');

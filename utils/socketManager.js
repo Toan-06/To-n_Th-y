@@ -28,7 +28,7 @@ const initSocket = (server) => {
 
     io.on('connection', (socket) => {
         const userId = socket.user.id;
-        console.log(`📡 User connected: ${userId} (${socket.id})`);
+        // console.log(`📡 User connected: ${userId} (${socket.id})`);
 
         // Track user sockets
         if (!userSockets.has(userId)) {
@@ -63,7 +63,7 @@ const initSocket = (server) => {
         });
 
         socket.on('disconnect', () => {
-            console.log(`🔌 User disconnected: ${userId} (${socket.id})`);
+            // console.log(`🔌 User disconnected: ${userId} (${socket.id})`);
             const sockets = userSockets.get(userId);
             if (sockets) {
                 sockets.delete(socket.id);

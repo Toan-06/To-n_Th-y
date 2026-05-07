@@ -5,15 +5,25 @@ const postSchema = new mongoose.Schema({
   userName: String,
   userAvatar: String,
   
-  content: { type: String, required: true },
+  content: { type: String, required: false },
   media: [{
     url: String,
-    type: { type: String, enum: ['image', 'video'], default: 'image' }
+    type: { type: String, enum: ['image', 'video', 'audio'], default: 'image' }
   }],
+  mediaLayout: { type: String, default: 'grid' },
+
   
   location: {
     name: String,
     placeId: mongoose.Schema.Types.ObjectId // Nếu gắn thẻ địa điểm du lịch
+  },
+  
+  attachment: {
+    type: { type: String, enum: ['itinerary', 'destination', 'none'], default: 'none' },
+    refId: mongoose.Schema.Types.ObjectId,
+    title: String,
+    subtitle: String,
+    link: String
   },
   
   likes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
