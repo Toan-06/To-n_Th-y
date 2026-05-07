@@ -174,7 +174,8 @@
   <div class="history-tabs-container">
     <div class="history-tabs">
       <div class="history-tab is-active" data-tab="wishlist">❤️ Yêu thích</div>
-      <div class="history-tab" data-tab="trips">🎒 Chuyến đi & Tour</div>
+      <div class="history-tab" data-tab="trips">🎒 Chuyến đi</div>
+      <div class="history-tab" data-tab="bookings">🏨 Dịch vụ đã đặt</div>
       <div class="history-tab" data-tab="reviews">⭐ Đánh giá địa điểm</div>
       <div class="history-tab" data-tab="feedbacks">💬 Phản hồi hệ thống</div>
     </div>
@@ -223,7 +224,7 @@
 
         // Auto-select tab from hash or query
         const hash = window.location.hash.replace('#', '');
-        if (hash && ['wishlist', 'trips', 'reviews', 'feedbacks'].includes(hash)) {
+        if (hash && ['wishlist', 'trips', 'bookings', 'reviews', 'feedbacks'].includes(hash)) {
           currentTab = hash;
           tabs.forEach(t => {
             t.classList.toggle('is-active', t.getAttribute('data-tab') === hash);
@@ -252,6 +253,10 @@
             const res = await fetch('/api/planner/my-trips', { headers: { 'x-auth-token': token } });
             const json = await res.json();
             renderTrips(json.data || []);
+          } else if (tab === 'bookings') {
+            const res = await fetch('/api/bookings/my', { headers: { 'x-auth-token': token } });
+            const json = await res.json();
+            renderBookings(json.data || []);
           } else if (tab === 'reviews') {
             const res = await fetch('/api/places/my-reviews', { headers: { 'x-auth-token': token } });
             const json = await res.json();
@@ -338,6 +343,71 @@
           </div>
         `).join('') + '</div>';
       }
+
+      function renderBookings(bookings) {
+        if (!bookings.length) {
+          content.innerHTML = '<div class="empty-state"><h2>Chưa có dịch vụ nào</h2><p>Hãy khám phá các tour du lịch và dịch vụ từ đối tác của chúng tôi.</p></div>';
+          return;
+        }
+
+        const STATUS_MAP = {
+          'pending': { label: 'Chờ xử lý', class: 'status-planning' },
+          'confirmed': { label: 'Đã xác nhận', class: 'status-completed' },
+          'completed': { label: 'Hoàn thành', class: 'status-completed' },
+          'cancelled': { label: 'Đã hủy', class: 'status-cancelled' }
+        };
+
+        content.innerHTML = '<div class="history-list">' + bookings.map(b => {
+          const s = STATUS_MAP[b.status] || { label: b.status, class: '' };
+          const bookingId = (b.bookingId || b._id || '').toString().slice(-6).toUpperCase();
+          
+          return `
+            <div class="history-card">
+              <div class="history-card__content">
+                <div style="display:flex; justify-content:space-between; align-items:start;">
+                  <div class="history-card__type">${b.bookingType === 'tour' ? 'Tour du lịch' : 'Dịch vụ đối tác'}</div>
+                  <span class="trip-status ${s.class}">${s.label}</span>
+                </div>
+                <h3 class="history-card__title">${b.placeName || 'Dịch vụ'} <span style="color:var(--text-muted); font-size:0.9rem;">(#${bookingId})</span></h3>
+                <p class="history-card__meta">
+                  📅 Sử dụng: ${new Date(b.useDate).toLocaleDateString('vi-VN')} · 
+                  💰 Tổng: ${new Intl.NumberFormat('vi-VN').format(b.totalPrice)}đ
+                </p>
+                
+                ${b.notes ? `
+                  <div class="history-card__text" style="background:rgba(16,185,129,0.05); border:1px solid rgba(16,185,129,0.1); margin:1rem 0;">
+                    <div style="font-weight:700; color:#10b981; font-size:0.8rem; margin-bottom:4px; text-transform:uppercase;">Phản hồi từ doanh nghiệp:</div>
+                    ${b.notes}
+                  </div>
+                ` : ''}
+
+                <div class="dest-card-actions" style="margin-top:1rem; gap:10px;">
+                  <button class="btn btn--primary btn--small btn-place-detail" data-place-id="${b.placeId}">Xem lại địa điểm</button>
+                  ${b.status === 'pending' ? \`<button class="btn btn--ghost btn--small" style="color:#f43f5e; border-color:rgba(244,63,94,0.2);" onclick="window.cancelBooking('\${b._id}')">Hủy yêu cầu</button>\` : ''}
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('') + '</div>';
+      }
+
+      window.cancelBooking = async function(id) {
+        if (!confirm('Bạn có chắc chắn muốn hủy yêu cầu đặt dịch vụ này?')) return;
+        try {
+          const res = await fetch('/api/bookings/' + id + '/cancel', {
+            method: 'PUT',
+            headers: { 'x-auth-token': token }
+          });
+          const json = await res.json();
+          if (json.success) {
+            loadTabData('bookings');
+          } else {
+            alert('Lỗi: ' + json.message);
+          }
+        } catch(e) {
+          alert('Lỗi kết nối máy chủ');
+        }
+      };
 
       function renderReviews(reviews) {
         if (!reviews.length) {

@@ -1049,6 +1049,8 @@
         art.className = "dest-card";
         art.setAttribute("data-tags", tags);
         art.setAttribute("data-place-id", p.id);
+        art.setAttribute("data-is-tour", p.isTour ? "true" : "false");
+        art.setAttribute("data-is-utility", p.isUtility ? "true" : "false");
         
         // Basic initial visibility check
         var matchesFilter = (currentFilter === "all" || tags.toLowerCase().indexOf(currentFilter.toLowerCase()) !== -1);
@@ -1088,6 +1090,8 @@
   }
   function cardMatchesFilter(card, filter) {
     if (filter === "all") return true;
+    if (filter === "tour") return card.getAttribute("data-is-tour") === "true";
+    if (filter === "utility") return card.getAttribute("data-is-utility") === "true";
     var tags = (card.getAttribute("data-tags") || "").toLowerCase();
     return tags.indexOf(filter.toLowerCase()) !== -1;
   }
@@ -2989,36 +2993,84 @@
     bookingForm.onsubmit = function(e) {
       e.preventDefault();
       const token = localStorage.getItem('wander_token');
-      if (!token) { alert('Vui lòng đăng nhập lại'); return; }
+      if (!token) { 
+        if (window.WanderUI) window.WanderUI.openAuthModal();
+        else alert('Vui lòng đăng nhập để đặt dịch vụ!'); 
+        return; 
+      }
 
-      const data = {
-        placeId: document.getElementById('booking-place-id').value,
-        useDate: document.getElementById('booking-date').value,
-        peopleCount: parseInt(document.getElementById('booking-people').value),
-        customerName: document.getElementById('booking-customer-name').value,
-        customerPhone: document.getElementById('booking-phone').value
+      const btn = document.getElementById('bk-submit-btn');
+      const errEl = document.getElementById('bk-error');
+      if (btn) { btn.disabled = true; btn.textContent = '⌛ Đang gửi...'; }
+      if (errEl) errEl.style.display = 'none';
+
+      const pmVal = document.querySelector('input[name="bk-payment"]:checked');
+      const elPlaceId = document.getElementById('bk-place-id');
+      const elDate = document.getElementById('bk-date');
+      const elTourDate = document.getElementById('bk-tour-date');
+      const elPeople = document.getElementById('bk-people');
+      const elName = document.getElementById('bk-name');
+      const elPhone = document.getElementById('bk-phone');
+      const elNotes = document.getElementById('bk-notes');
+      const elIsTour = document.getElementById('bk-is-tour');
+
+      if (!elPlaceId || !elDate || !elName || !elPhone) {
+        console.error('Booking form elements missing');
+        if (btn) btn.disabled = false;
+        return;
+      }
+
+      const payload = {
+        placeId: elPlaceId.value,
+        useDate: elDate.value,
+        tourDate: elTourDate ? elTourDate.value : null,
+        peopleCount: parseInt(elPeople ? elPeople.value : 1) || 1,
+        customerName: elName.value.trim(),
+        customerPhone: elPhone.value.trim(),
+        specialRequests: elNotes ? elNotes.value.trim() : '',
+        paymentMethod: pmVal ? pmVal.value : 'contact',
+        bookingType: (elIsTour && elIsTour.value === '1') ? 'tour' : 'service'
       };
 
       fetch('/api/bookings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-auth-token': token },
-        body: JSON.stringify(data)
+        body: JSON.stringify(payload)
       })
       .then(r => r.json())
       .then(json => {
+        if (btn) { btn.disabled = false; btn.textContent = '🚀 XÁC NHẬN ĐẶT CHỖ'; }
+        
         if (json.success) {
-          alert('Đặt chỗ thành công! Doanh nghiệp sẽ sớm liên hệ xác nhận với bạn.');
           closeModals();
+          const bId = json.data.bookingId || json.data._id;
+          if (window.WanderUI) window.WanderUI.showToast('✅ Đặt thành công! Mã đơn: ' + bId, 'success');
+          else alert('Đặt chỗ thành công! Bạn có thể theo dõi trạng thái tại phần Lịch sử hoạt động.');
+          
+          // Redirect to payment if needed
+          if (pmVal && pmVal.value !== 'contact') {
+            setTimeout(() => { window.location.href = 'payment.html?pay=' + bId; }, 1000);
+          }
         } else {
-          alert('Lỗi: ' + json.message);
+          if (errEl) {
+            errEl.textContent = json.message || 'Lỗi lưu đơn hàng';
+            errEl.style.display = 'block';
+          } else {
+            alert('Lỗi: ' + json.message);
+          }
         }
       })
       .catch(err => {
         console.error('Booking error:', err);
-        alert('Lỗi kết nối máy chủ');
+        if (btn) { btn.disabled = false; btn.textContent = '🚀 XÁC NHẬN ĐẶT CHỖ'; }
+        if (errEl) {
+          errEl.textContent = 'Lỗi kết nối máy chủ. Vui lòng thử lại sau.';
+          errEl.style.display = 'block';
+        }
       });
     };
   }
+
 
   // --- Business Services (Partner Tours) ---
   function renderBusinessServices() {

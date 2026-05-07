@@ -3,9 +3,10 @@ const mongoose = require('mongoose');
 const placeSchema = new mongoose.Schema({
   id:            { type: String, unique: true, sparse: true },
   name:          { type: String, required: true },
-  kind:          { type: String, enum: ['diem-du-lich', 'tien-ich', 'am-thuc'], default: 'diem-du-lich' },
+  kind:          { type: String, enum: ['diem-du-lich', 'trai-nghiem', 'khach-san', 'nha-hang', 'giai-tri', 'tien-ich'], default: 'diem-du-lich' },
   // Tour-specific fields
   isTour:        { type: Boolean, default: false },
+  isUtility:     { type: Boolean, default: false },
   tourDuration:  { type: String, default: '' },        // VD: '3N2Đ'
   tourIncludes:  [String],                              // Bao gồm: ăn sáng, xe đón...
   tourGroupSize: { type: Number, default: null },       // Số khách tối đa

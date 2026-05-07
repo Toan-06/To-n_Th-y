@@ -938,8 +938,8 @@
             </div>
           </section>
 
-          <!-- Moderation Panel -->
-          <section id="panel-moderation" class="admin-panel glass-panel" hidden>
+          <!-- Ads Moderation Panel (Secondary/Archive) -->
+          <section id="panel-moderation-ads" class="admin-panel glass-panel" hidden>
             <div style="display:flex; justify-content: space-between; align-items: flex-end; margin-bottom: 1.5rem;">
               <div>
                 <h2 class="section-title">Duyệt Quảng Cáo Khách Sạn</h2>
@@ -959,7 +959,7 @@
                     <th>Hành động</th>
                   </tr>
                 </thead>
-                <tbody id="moderation-tbody">
+                <tbody id="moderation-ads-tbody">
                   <tr><td colspan="5" class="table-loading">Đang tải hàng đợi...</td></tr>
                 </tbody>
               </table>
@@ -1719,10 +1719,33 @@
                 required /></label>
             <label class="field"><span class="field-label">Loại (Kind)</span>
               <select name="kind">
-                <option value="diem-du-lich" selected>Điểm du lịch</option>
-                <option value="tien-ich">Tiện ích</option>
+                <option value="diem-du-lich" selected>Điểm tham quan</option>
+                <option value="trai-nghiem">Trải nghiệm / Tour</option>
+                <option value="khach-san">Khách sạn / Nghỉ dưỡng</option>
+                <option value="nha-hang">Nhà hàng / Ẩm thực</option>
+                <option value="giai-tri">Giải trí / Vui chơi</option>
+                <option value="tien-ich">Tiện ích khác</option>
               </select>
             </label>
+
+            <div class="field field--full" style="display:flex; gap:2rem; padding:0.5rem; background:rgba(255,255,255,0.03); border-radius:8px; border:1px solid rgba(255,255,255,0.05);">
+              <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer;">
+                <input type="checkbox" id="chk-is-tour" style="width:18px;height:18px" />
+                <span class="field-label" style="margin:0">Là Tour du lịch</span>
+              </label>
+              <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer;">
+                <input type="checkbox" id="chk-is-utility" style="width:18px;height:18px" />
+                <span class="field-label" style="margin:0">Là Tiện ích (Essentials)</span>
+              </label>
+              <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer;">
+                <input type="checkbox" id="chk-top" style="width:18px;height:18px" />
+                <span class="field-label" style="margin:0">Nổi bật (Top)</span>
+              </label>
+              <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer;">
+                <input type="checkbox" id="chk-verified" style="width:18px;height:18px" />
+                <span class="field-label" style="margin:0">Đã xác minh</span>
+              </label>
+            </div>
             <label class="field"><span class="field-label">Vùng miền</span><input type="text" name="region" /></label>
             <label class="field"><span class="field-label">Phân loại (Category)</span><input type="text" name="category" placeholder="ví dụ: Di sản, Ẩm thực..." /></label>
             <label class="field field--full"><span class="field-label">Đối tác sở hữu (Owner ID)</span><input type="text" name="ownerId" readonly style="opacity:0.7; cursor:not-allowed; background:rgba(255,255,255,0.05)" placeholder="Dữ liệu hệ thống hoặc ID doanh nghiệp" /></label>
@@ -1800,24 +1823,10 @@
               </div>
             </fieldset>
             
-            <fieldset class="field field--full" style="border:1px solid var(--border); padding:1rem; border-radius:var(--radius-sm); margin-top:0.5rem;">
-              <legend class="field-label" style="padding:0 0.5rem;">Chứng thực dữ liệu</legend>
-              <div style="display:flex; gap:1rem; flex-direction:column;">
-                <label style="display:flex; align-items:center; gap:0.5rem;">
-                  <input type="checkbox" name="verified" id="chk-verified" style="width:20px;height:20px;accent-color:var(--success)" />
-                  <strong>Dữ liệu này đã được kiểm chứng & theo nguồn thực tế</strong>
-                </label>
-                <div style="display:flex; gap:1rem; width:100%;">
-                  <label class="field" style="flex:1"><span class="field-label">Tên Nguồn/Tổ chức</span><input type="text" name="sourceName" placeholder="Ví dụ: VQG Côn Đảo" /></label>
-                  <label class="field" style="flex:1"><span class="field-label">Link Tham chiếu</span><input type="url" name="sourceUrl" placeholder="https://..." /></label>
-                </div>
-              </div>
-            </fieldset>
-
-            <label class="field field--full" style="display:flex;align-items:center;gap:0.75rem;padding:0.5rem 0">
-              <input type="checkbox" name="top" id="chk-top" style="width:20px;height:20px" />
-              <span class="field-label" style="margin:0">Đánh dấu là điểm "Top"</span>
-            </label>
+            <div style="display:flex; gap:1rem; width:100%; margin-top: 1rem;">
+              <label class="field" style="flex:1"><span class="field-label">Tên Nguồn/Tổ chức</span><input type="text" name="sourceName" placeholder="Ví dụ: VQG Côn Đảo" /></label>
+              <label class="field" style="flex:1"><span class="field-label">Link Tham chiếu</span><input type="url" name="sourceUrl" placeholder="https://..." /></label>
+            </div>
           </div>
           <div style="display:flex;gap:0.75rem;margin-top:1rem">
             <button type="submit" class="btn btn--primary" style="flex:1">💾 Lưu Thông Tin</button>

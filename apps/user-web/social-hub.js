@@ -41,9 +41,9 @@ const SocialHub = {
             this.loadFriendsList();
             this.loadConversations();
             this.renderTrending();
-            if (window.WanderUI && window.WanderUI.finishTopLoader) window.WanderUI.finishTopLoader();
         }).catch(err => {
             console.error("Social hub init error:", err);
+        }).finally(() => {
             if (window.WanderUI && window.WanderUI.finishTopLoader) window.WanderUI.finishTopLoader();
         });
 
@@ -245,31 +245,48 @@ const SocialHub = {
     },
 
     loadUserProfile: async function () {
+        const token = localStorage.getItem('wander_token');
+        if (!token) return;
+
         try {
             // First, check cache for instant render
             const cached = localStorage.getItem('wander_user');
             if (cached) {
-                this.user = JSON.parse(cached);
-                this.updateUserUI();
+                try {
+                    this.user = JSON.parse(cached);
+                    this.updateUserUI();
+                } catch (e) { }
             }
 
-            const res = await fetch('/api/auth/user/me', { headers: { 'x-auth-token': localStorage.getItem('wander_token') } });
+            // Sync with server with cache-buster for cross-device consistency
+            const res = await fetch(`/api/auth/user/me?t=${Date.now()}`, { 
+                headers: { 'x-auth-token': token } 
+            });
+
+            if (res.status === 401 || res.status === 403) {
+                console.warn("🔐 Session expired or portal mismatch. Redirecting...");
+                localStorage.removeItem('wander_token');
+                localStorage.removeItem('wander_user');
+                this.showGuestLanding();
+                return;
+            }
+
             const data = await res.json();
             if (data.success) {
-                // Normalize user object to ensure both _id and id exist for compatibility
+                // Normalize user object
                 const user = data.user;
                 if (user) {
                     if (!user._id && user.id) user._id = user.id;
                     if (!user.id && user._id) user.id = user._id;
                 }
                 this.user = user;
-                localStorage.setItem('wander_user', JSON.stringify(this.user)); // Sync cache
+                localStorage.setItem('wander_user', JSON.stringify(this.user));
                 this.updateUserUI();
-
-                // Fetch stats in background
                 this.loadUserStats();
             }
-        } catch (err) { console.error("Lỗi tải hồ sơ:", err); }
+        } catch (err) { 
+            console.error("Lỗi tải hồ sơ:", err); 
+        }
     },
 
     updateUserUI: function () {
@@ -1540,7 +1557,13 @@ const SocialHub = {
             }
         } catch (err) {
             console.error('fetchFeed error:', err);
-            feedContainer.innerHTML = '<p class="error" style="text-align:center;padding:40px;">Không thể tải bảng tin.</p>';
+            feedContainer.innerHTML = `
+                <div class="glass-card" style="text-align:center;padding:60px;border-radius:24px;">
+                    <p style="font-size:2.5rem;margin-bottom:16px;color:#f43f5e;"><i class="fas fa-exclamation-triangle"></i></p>
+                    <p style="color:var(--text-muted);font-weight:600;">Không thể kết nối máy chủ. Vui lòng kiểm tra kết nối mạng của bạn.</p>
+                    <button class="btn btn--secondary btn--sm" style="margin-top:20px;" onclick="location.reload()">Thử lại</button>
+                </div>
+            `;
         }
     },
 
@@ -1608,8 +1631,8 @@ const SocialHub = {
                 ${post.media && post.media.length > 0 ? `
                     <div class="post-media ${post.mediaLayout ? 'media-layout-' + post.mediaLayout : (post.media.length > 1 ? 'media-grid' : '')}">
                         ${post.media.map((m, i) => {
-                            if (m.type === 'image') return `<img src="${m.url}" alt="Ảnh bài viết" onclick="SocialHub.viewImage('${m.url}')" onerror="this.style.display='none'">`;
-                            if (m.type === 'video') return `<video src="${m.url}" controls></video>`;
+                            if (m.type === 'image') return `<img src="${m.url}" alt="Ảnh bài viết" onclick="SocialHub.viewImage('${m.url}')" onerror="this.onerror=null; this.src='assets/placeholder-image.svg';">`;
+                            if (m.type === 'video') return `<video src="${m.url}" controls playsinline webkit-playsinline preload="metadata" poster="assets/video-placeholder.jpg" onerror="this.parentElement.innerHTML='<div class=\"media-error\">Không thể tải video</div>'"></video>`;
                             if (m.type === 'audio') return `
                                 <div class="post-audio-card">
                                     <div class="audio-wave"><span></span><span></span><span></span><span></span></div>

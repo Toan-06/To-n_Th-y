@@ -103,6 +103,8 @@
           <button type="button" class="filter-btn is-active" data-dest-filter="all">Tất cả</button>
           <button type="button" class="filter-btn" data-dest-filter="biển">Biển đảo</button>
           <button type="button" class="filter-btn" data-dest-filter="văn hóa">Văn hóa</button>
+          <button type="button" class="filter-btn" data-dest-filter="tour">Tours du lịch</button>
+          <button type="button" class="filter-btn" data-dest-filter="utility">Tiện ích</button>
           <button type="button" class="filter-btn" data-dest-filter="leo núi">Leo núi</button>
           <button type="button" class="filter-btn" data-dest-filter="ẩm thực">Ẩm thực</button>
         </div>
@@ -732,57 +734,6 @@
       });
     });
 
-    var bkForm = document.getElementById('booking-form');
-    if (bkForm) {
-      bkForm.addEventListener('submit', function(e){
-        e.preventDefault();
-        var token = localStorage.getItem('wander_token');
-        if (!token) { alert('Vui lòng đăng nhập để đặt dịch vụ!'); return; }
-        var btn = document.getElementById('bk-submit-btn');
-        var errEl = document.getElementById('bk-error');
-        btn.disabled = true; btn.textContent = '⌛ Đang gửi...';
-        errEl.style.display='none';
-        var pmVal = document.querySelector('input[name="bk-payment"]:checked');
-        var payload = {
-          placeId: document.getElementById('bk-place-id').value,
-          useDate: document.getElementById('bk-date').value,
-          tourDate: document.getElementById('bk-tour-date').value || null,
-          peopleCount: parseInt(document.getElementById('bk-people').value)||1,
-          customerName: document.getElementById('bk-name').value.trim(),
-          customerPhone: document.getElementById('bk-phone').value.trim(),
-          specialRequests: document.getElementById('bk-notes').value.trim(),
-          paymentMethod: pmVal ? pmVal.value : 'contact',
-          bookingType: document.getElementById('bk-is-tour').value==='1'?'tour':'service'
-        };
-        // Gửi đơn hàng sang New API (Port 5000) để đồng bộ với Business Dashboard
-        fetch('http://localhost:5000/api/bookings', {
-          method:'POST',
-          headers:{'Content-Type':'application/json','x-auth-token':token},
-          body:JSON.stringify(payload)
-        }).then(function(r){return r.json();})
-          .then(function(json){
-            btn.disabled=false; btn.textContent='🚀 XÁC NHẬN ĐẶT CHỖ';
-            if (json.success) {
-              closeBookingModal();
-              var bId = json.data.bookingId || json.data._id;
-              if (window.WanderUI) window.WanderUI.showToast('✅ Đặt thành công! Mã: ' + bId,'success');
-              else alert('✅ Đặt thành công! Mã đơn: ' + bId);
-              
-              if (pmVal && pmVal.value !== 'contact') {
-                setTimeout(function() { window.location.href = 'payment.html?pay=' + bId; }, 1000);
-              }
-            } else {
-              errEl.textContent = json.message || 'Đặt thất bại, vui lòng thử lại.';
-              errEl.style.display='block';
-            }
-          }).catch(function(err){
-            console.error('Booking error:', err);
-            btn.disabled=false; btn.textContent='🚀 XÁC NHẬN ĐẶT CHỖ';
-            errEl.textContent='Lỗi kết nối tới hệ thống đặt chỗ mới. Vui lòng thử lại.';
-            errEl.style.display='block';
-          });
-      });
-    }
   });
   </script>
 </body>

@@ -18,22 +18,7 @@
     }
 
     async function apiFetch(url, opts) {
-        // 1. Thử dùng window.api (Port 5000)
-        if (window.api && typeof window.api.get === 'function') {
-            try {
-                const method = (opts?.method || 'GET').toLowerCase();
-                const config = { headers: opts?.headers };
-                
-                if (method === 'get') return await window.api.get(url, config);
-                if (method === 'put') return await window.api.put(url, JSON.parse(opts.body || '{}'), config);
-                if (method === 'post') return await window.api.post(url, JSON.parse(opts.body || '{}'), config);
-            } catch (err) {
-                console.warn('[apiFetch] Port 5000 unreachable, falling back to local...', err.message);
-                // Nếu lỗi kết nối, tiếp tục thực hiện fallback bên dưới
-            }
-        }
-
-        // 2. Fallback dùng fetch (Port 3000/3002) trỏ về cùng origin
+        // Fallback dùng fetch (Port 3000/3002) trỏ về cùng origin
         opts = opts || {};
         const token = getToken();
         opts.headers = Object.assign({
@@ -375,14 +360,24 @@
         if (b.status !== 'cancelled' && b.status !== 'completed')
             btns += `<button class="bk-btn-cancel" onclick="window.updateBookingStatus('${id}','cancelled')">❌ Hủy đơn</button>`;
         btns += `<button class="bk-btn-close" onclick="window.closeBookingDetail()">Đóng</button>`;
-        return `<div class="bk-action-btns">${btns}</div>`;
+        
+        return `
+            <div style="margin-top:20px;">
+                <label style="display:block;font-size:12px;font-weight:700;color:#64748b;margin-bottom:8px">PHẢN HỒI CHO KHÁCH HÀNG (Ghi chú)</label>
+                <textarea id="bk-note-input" placeholder="Nhập lời nhắn, hướng dẫn hoặc lý do hủy..." 
+                          style="width:100%;min-height:80px;padding:12px;border-radius:12px;border:1px solid #e2e8f0;font-size:13px;outline:none;background:#f8fafc;resize:vertical;">${b.notes || ''}</textarea>
+            </div>
+            <div class="bk-action-btns">${btns}</div>
+        `;
     }
 
     window.updateBookingStatus = function(id, newStatus) {
+        const note = document.getElementById('bk-note-input')?.value || '';
         if (!confirm('Xác nhận thay đổi trạng thái đơn này?')) return;
+        
         apiFetch('/api/bookings/' + id, {
             method: 'PUT',
-            body: JSON.stringify({ status: newStatus })
+            body: JSON.stringify({ status: newStatus, notes: note })
         }).then(json => {
             if (json.success) {
                 // Update local state

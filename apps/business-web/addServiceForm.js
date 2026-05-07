@@ -268,14 +268,22 @@ function initAddServiceForm(rootId = 'modal-root', triggerSelector = '.btn-add')
               <div class="svc-form-group">
                 <label class="svc-form-label">Loại dịch vụ *</label>
                 <select id="svc-input-type" class="svc-form-input" required>
-                  <option value="diem-du-lich">Điểm du lịch</option>
-                  <option value="tien-ich">Tiện ích / Khách sạn</option>
+                  <option value="trai-nghiem">Trải nghiệm / Tour</option>
+                  <option value="khach-san">Khách sạn / Nghỉ dưỡng</option>
+                  <option value="nha-hang">Nhà hàng / Ẩm thực</option>
+                  <option value="giai-tri">Giải trí / Vui chơi</option>
+                  <option value="diem-du-lich">Điểm tham quan</option>
                 </select>
               </div>
               <div class="svc-form-group">
                 <label class="svc-form-label">Giá thấp nhất (VND) *</label>
                 <input type="number" id="svc-input-price" class="svc-form-input" placeholder="VD: 1500000" min="0" required>
               </div>
+            </div>
+
+            <div class="svc-form-group" style="flex-direction: row; align-items: center; gap: 10px; background: #f0f7ff; padding: 10px; border-radius: 10px;">
+              <input type="checkbox" id="svc-input-istour" style="width: 18px; height: 18px; cursor: pointer;">
+              <label for="svc-input-istour" class="svc-form-label" style="cursor: pointer; margin: 0;">Dịch vụ này là Tour du lịch (Trọn gói / Lịch trình sẵn)</label>
             </div>
             
             <div class="svc-form-group">
@@ -329,6 +337,7 @@ function initAddServiceForm(rootId = 'modal-root', triggerSelector = '.btn-add')
         body: JSON.stringify({
           name: service.name,
           kind: service.type,
+          isTour: service.isTour,
           priceFrom: service.price,
           region: service.location,
           description: service.description,
@@ -394,6 +403,7 @@ function initAddServiceForm(rootId = 'modal-root', triggerSelector = '.btn-add')
     const serviceData = {
       name: document.getElementById('svc-input-name').value,
       type: document.getElementById('svc-input-type').value,
+      isTour: document.getElementById('svc-input-istour').checked,
       price: document.getElementById('svc-input-price').value,
       location: document.getElementById('svc-input-loc').value,
       description: document.getElementById('svc-input-desc').value,

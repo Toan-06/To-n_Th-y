@@ -290,7 +290,7 @@
     };
 
     function loadDashboardStats() {
-        fetch('http://localhost:5000/api/dashboard/summary', {
+        fetch('/api/dashboard/summary', {
             headers: { 'x-auth-token': localStorage.getItem('biz_auth_token') || localStorage.getItem('wander_token') }
         })
         .then(r => r.json())
@@ -329,7 +329,7 @@
         const container = document.getElementById('activities-container');
         if (!container) return;
 
-        fetch('http://localhost:5000/api/dashboard/activities', {
+        fetch('/api/dashboard/activities', {
             headers: { 'x-auth-token': localStorage.getItem('biz_auth_token') || localStorage.getItem('wander_token') }
         })
         .then(r => r.json())
@@ -356,7 +356,7 @@
         const container = document.getElementById('dashboard-messages');
         if (!container) return;
 
-        fetch('http://localhost:5000/api/messages', {
+        fetch('/api/messages', {
             headers: { 'x-auth-token': localStorage.getItem('biz_auth_token') || localStorage.getItem('wander_token') }
         })
         .then(r => r.json())

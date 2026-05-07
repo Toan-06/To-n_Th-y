@@ -54,7 +54,7 @@
             </div>
         `;
 
-        fetch('http://localhost:5000/api/dashboard/user-analytics', { headers: getAuthHeader() })
+        fetch('/api/dashboard/user-analytics', { headers: getAuthHeader() })
         .then(r => r.json())
         .then(json => {
             if (json.success && json.data) {
@@ -124,7 +124,7 @@
             </div>
         `;
 
-        fetch('http://localhost:5000/api/dashboard/user-analytics', { headers: getAuthHeader() })
+        fetch('/api/dashboard/user-analytics', { headers: getAuthHeader() })
         .then(r => r.json())
         .then(json => {
             if (json.success && json.data) {

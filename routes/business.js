@@ -188,6 +188,7 @@ router.post('/places', businessAuth, upload.array('imageFile', 10), async (req, 
       tags: tagsArr,
       amenities: amenitiesArr,
       top: req.body.top === 'true',
+      isTour: req.body.isTour === 'true' || req.body.isTour === true,
       status: 'pending',
       source: 'partner',
       amusementPlaces: safeParseArray(req, 'amusementPlaces', true),
@@ -219,7 +220,7 @@ router.put('/places/:id', businessAuth, upload.array('imageFile', 10), async (re
     }
     
     // Validate kind field
-    const validKinds = ['diem-du-lich', 'tien-ich'];
+    const validKinds = ['diem-du-lich', 'khach-san', 'nha-hang', 'giai-tri', 'trai-nghiem', 'tien-ich'];
     if (!validKinds.includes(req.body.kind)) {
       return res.status(400).json({ 
         success: false, 
@@ -289,6 +290,9 @@ router.put('/places/:id', businessAuth, upload.array('imageFile', 10), async (re
     // If a business updates an approved place, it goes back to pending for re-review
     if (req.user.role === 'business') {
       updates.status = 'pending';
+    }
+    if (req.body.isTour !== undefined) {
+      updates.isTour = req.body.isTour === 'true' || req.body.isTour === true;
     }
 
     Object.assign(place, updates);

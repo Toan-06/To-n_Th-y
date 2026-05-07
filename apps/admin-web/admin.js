@@ -399,6 +399,9 @@
         }
       }, 2800);
 
+      // Initial data fetch
+      loadModeration(true);
+
       initAdmin().catch(err => {
         console.error("Admin Initialization Error:", err);
         // If it fails, we still MUST hide the overlay
@@ -2299,6 +2302,8 @@
 
       document.getElementById('chk-top').checked = !!place.top;
       document.getElementById('chk-verified').checked = !!place.verified;
+      document.getElementById('chk-is-tour').checked = !!place.isTour;
+      document.getElementById('chk-is-utility').checked = !!place.isUtility;
 
       // Handle displaying images
       let imagesArr = place.images && place.images.length > 0 ? place.images : (place.image ? [place.image] : []);
@@ -2349,6 +2354,8 @@
 
     formData.set('top', document.getElementById('chk-top').checked);
     formData.set('verified', document.getElementById('chk-verified').checked);
+    formData.set('isTour', document.getElementById('chk-is-tour').checked);
+    formData.set('isUtility', document.getElementById('chk-is-utility').checked);
 
     // Sync retained URL array to FormData
     let retainedImages = currentDropzoneFiles.filter(f => f.url && !f.file).map(f => f.url);
@@ -2938,10 +2945,10 @@
 
   // --- Moderation ---
   let moderationData = [];
-  async function loadModeration() {
+  async function loadModeration(silent = false) {
     const tbody = document.getElementById('moderation-tbody');
     if (!tbody) return;
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center">Đang tải hàng chờ...</td></tr>';
+    if (!silent) tbody.innerHTML = '<tr><td colspan="5" style="text-align:center">Đang tải hàng chờ...</td></tr>';
     
     try {
       const json = await apiFetch('/api/admin/places'); // Admin sees all, filter for partner/pending
@@ -3000,10 +3007,16 @@
       const statusClass = p.status === 'approved' ? 'stat-pill--ok' : (p.status === 'pending' ? 'stat-pill--warn' : 'stat-pill--err');
       const statusText = p.status === 'approved' ? 'Đã duyệt' : (p.status === 'pending' ? 'Chờ duyệt' : 'Bị từ chối');
       
-      const isHotel = p.name.toLowerCase().includes('khách sạn') || Math.random() > 0.4;
-      const adName = isHotel ? `[HOTEL] Khuyến mãi hè - ${p.name}` : `[ADS] Quảng bá dịch vụ - ${p.name}`;
-      const budget = (Math.floor(Math.random() * 50) + 10) + '.000.000 VNĐ';
-      const duration = (Math.floor(Math.random() * 30) + 7) + ' Ngày';
+      const kindLabel = {
+        'diem-du-lich': 'Điểm du lịch',
+        'khach-san': 'Khách sạn',
+        'nha-hang': 'Nhà hàng',
+        'giai-tri': 'Giải trí',
+        'trai-nghiem': 'Trải nghiệm',
+        'tien-ich': 'Tiện ích'
+      }[p.kind] || p.kind || 'Địa điểm';
+
+      const typeLabel = p.isTour ? 'Tour du lịch' : (p.isUtility ? 'Tiện ích' : kindLabel);
 
       tr.innerHTML = `
         <td>
@@ -3012,27 +3025,27 @@
                  onerror="this.src='https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=60&q=80'"
                  style="width:50px; height:35px; border-radius:4px; object-fit:cover;" />
             <div>
-              <div style="font-weight:600">${adName}</div>
-              <div style="font-size:0.75rem; color:var(--text-muted)">Gắn thẻ: <span style="color:var(--admin-accent)">${p.name}</span></div>
+              <div style="font-weight:600">${p.name}</div>
+              <div style="font-size:0.75rem; color:var(--text-muted)">Khu vực: <span style="color:var(--admin-accent)">${p.region || 'Chưa xác định'}</span></div>
             </div>
           </div>
         </td>
         <td>
-          <div style="font-weight: 500;">${p.ownerName || 'Công ty TNHH Du lịch System'}</div>
-          <small style="color:var(--text-muted)">Đối tác doanh nghiệp</small>
+          <div style="font-weight: 500;">${p.ownerName || 'Đối tác doanh nghiệp'}</div>
+          <small style="color:var(--text-muted)">ID: ${p.ownerId ? p.ownerId.slice(-6) : 'N/A'}</small>
         </td>
         <td>
-           <div style="font-weight: 600; color: #10b981;">${budget}</div>
-           <small style="color:var(--text-muted)">Thời gian chạy: ${duration}</small>
+           <div style="font-weight: 600; color: var(--admin-primary);">${typeLabel}</div>
+           <small style="color:var(--text-muted)">Cập nhật: ${new Date(p.updatedAt || p.createdAt || Date.now()).toLocaleDateString()}</small>
         </td>
         <td><span class="stat-pill ${statusClass}">${statusText}</span></td>
         <td>
-          <div style="display:flex; gap:0.5rem">
+          <div style="display:flex; gap:0.5rem; justify-content: flex-end;">
             ${p.status === 'pending' ? `
               <button class="btn btn--small btn--primary" data-mod-approve="${p.id}">Duyệt</button>
               <button class="btn btn--small btn--outline btn--danger" data-mod-reject="${p.id}">Từ chối</button>
             ` : `
-              <button class="btn btn--small btn--ghost" data-edit-place="${p.id}">Xem lại</button>
+              <button class="btn btn--small btn--ghost" onclick="WanderAdmin.openPlaceDetail('${p.id}')">Xem lại</button>
             `}
           </div>
         </td>

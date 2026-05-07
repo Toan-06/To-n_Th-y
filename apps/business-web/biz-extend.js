@@ -17,18 +17,6 @@
   var API = window.location.origin;
 
   async function apiFetch(url, options) {
-    if (window.api && typeof window.api.get === 'function') {
-      try {
-        var method = (options && options.method || 'GET').toLowerCase();
-        var config = { headers: (options && options.headers) || {} };
-        if (method === 'get') return await window.api.get(url, config);
-        if (method === 'post') return await window.api.post(url, options.body ? (typeof options.body === 'string' ? JSON.parse(options.body) : options.body) : {}, config);
-        if (method === 'put') return await window.api.put(url, options.body ? (typeof options.body === 'string' ? JSON.parse(options.body) : options.body) : {}, config);
-        if (method === 'delete') return await window.api.delete(url, config);
-      } catch (err) {
-        console.warn('[apiFetch Extension] Fallback to local due to:', err.message);
-      }
-    }
     var token = getToken();
     options = options || {};
     options.headers = options.headers || {};

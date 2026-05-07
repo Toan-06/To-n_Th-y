@@ -5,6 +5,7 @@ const Transaction = require('../models/Transaction');
 const Place = require('../models/Place');
 const { auth, businessAuth, sharedAuth } = require('./auth');
 const User = require('../models/User');
+const Notification = require('../models/Notification');
 
 // 1. User: Create a booking (service OR tour)
 router.post('/', auth, async (req, res) => {
@@ -137,6 +138,23 @@ router.put('/:id', sharedAuth, async (req, res) => {
     const booking = await Booking.findOneAndUpdate(query, update, { new: true });
     if (!booking) return res.status(404).json({ success: false, message: 'Không tìm thấy đơn hàng hoặc bạn không có quyền thao tác.' });
     
+    // Notify User on status change (if business/admin updated it)
+    if (req.user.role === 'business' || req.user.role === 'admin') {
+      const statusLabels = { 'confirmed': 'đã xác nhận', 'completed': 'đã hoàn thành', 'cancelled': 'đã bị hủy' };
+      const label = statusLabels[status] || status;
+      const bIdStr = (booking.bookingId || booking._id).toString();
+      const pName = booking.placeName || 'Dịch vụ';
+      
+      const newNotif = new Notification({
+        userId: booking.userId,
+        title: 'Cập nhật đơn hàng',
+        message: `Đơn hàng #${bIdStr.slice(-6).toUpperCase()} (${pName}) của bạn ${label}.`,
+        type: 'system',
+        link: '/history.html#bookings'
+      });
+      await newNotif.save();
+    }
+
     res.json({ success: true, data: booking });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Lỗi cập nhật đơn hàng: ' + err.message });
@@ -170,6 +188,22 @@ router.put('/:id/status', businessAuth, async (req, res) => {
       { new: true }
     );
     if (!booking) return res.status(404).json({ success: false, message: 'Không tìm thấy đơn hoặc sai quyền' });
+
+    // Notify User
+    const statusLabels = { 'confirmed': 'đã xác nhận', 'completed': 'đã hoàn thành', 'cancelled': 'đã bị hủy' };
+    const label = statusLabels[status] || status;
+    const bIdStr = (booking.bookingId || booking._id).toString();
+    const pName = booking.placeName || 'Dịch vụ';
+
+    const newNotif = new Notification({
+      userId: booking.userId,
+      title: 'Cập nhật dịch vụ',
+      message: `Dịch vụ #${bIdStr.slice(-6).toUpperCase()} (${pName}) đã được doanh nghiệp ${label}.`,
+      type: 'system',
+      link: '/history.html#bookings'
+    });
+    await newNotif.save();
+
     res.json({ success: true, data: booking });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

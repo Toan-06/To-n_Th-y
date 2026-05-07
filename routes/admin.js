@@ -973,6 +973,8 @@ router.post('/places', adminTokenAuth, superAdminAuth, upload.array('imageFile',
       tags: typeof req.body.tags === 'string' ? req.body.tags.split(',').map(t => t.trim()) : req.body.tags,
       top: req.body.top === 'true',
       verified: req.body.verified === 'true',
+      isTour: req.body.isTour === 'true',
+      isUtility: req.body.isUtility === 'true',
       amusementPlaces: parseJsonArray('amusementPlaces'),
       accommodations: parseJsonArray('accommodations'),
       diningPlaces: parseJsonArray('diningPlaces'),
@@ -1061,6 +1063,8 @@ router.put('/places/:id', adminTokenAuth, adminAuth, upload.array('imageFile', 1
     if (updates.lng === '') updates.lng = null;
     if (req.body.top !== undefined) updates.top = req.body.top === 'true';
     if (req.body.verified !== undefined) updates.verified = req.body.verified === 'true';
+    if (req.body.isTour !== undefined) updates.isTour = req.body.isTour === 'true';
+    if (req.body.isUtility !== undefined) updates.isUtility = req.body.isUtility === 'true';
 
     Object.assign(place, updates);
     await place.save();

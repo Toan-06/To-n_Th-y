@@ -25,7 +25,7 @@
 
     // ── Tạo Axios instance ────────────────────────────────────────
     window.api = axios.create({
-        baseURL: 'http://localhost:5000/api',
+        baseURL: '/api',
         timeout: 12000,
         headers: { 'Content-Type': 'application/json' }
     });
