@@ -81,11 +81,11 @@
         const existing = load();
         if (existing.length > 0) return;
         const samples = [
-            { id: 's1', name: 'Tour Hạ Long VIP 2N1Đ', category: 'tour', location: 'Quảng Ninh', price: 2500000, unit: 'người', status: 'active', rating: 4.8, bookings: 124, image: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=600&q=80', createdAt: new Date().toISOString() },
-            { id: 's2', name: 'Khách sạn Mường Thanh Grand', category: 'hotel', location: 'Đà Nẵng', price: 1800000, unit: 'đêm', status: 'active', rating: 4.5, bookings: 87, image: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=600&q=80', createdAt: new Date().toISOString() },
-            { id: 's3', name: 'Nhà hàng Bếp Việt Hội An', category: 'restaurant', location: 'Hội An', price: 350000, unit: 'người', status: 'active', rating: 4.7, bookings: 203, image: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600&q=80', createdAt: new Date().toISOString() },
-            { id: 's4', name: 'Tour Sapa Trekking 3N2Đ', category: 'tour', location: 'Lào Cai', price: 3200000, unit: 'người', status: 'pending', rating: 0, bookings: 0, image: 'https://images.unsplash.com/photo-1501854140801-50d01698950b?w=600&q=80', createdAt: new Date().toISOString() },
-            { id: 's5', name: 'Nghỉ dưỡng Phú Quốc 5 Sao', category: 'hotel', location: 'Phú Quốc', price: 4500000, unit: 'đêm', status: 'paused', rating: 4.9, bookings: 56, image: 'https://images.unsplash.com/photo-1540202404-a2f29016b523?w=600&q=80', createdAt: new Date().toISOString() },
+            { id: 's1', name: 'Tour Hạ Long VIP 2N1Đ', category: 'tour', location: 'Quảng Ninh', price: 2500000, unit: 'người', status: 'active', rating: 4.8, bookings: 124, image: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=600&q=80', desc: 'Khám phá vẻ đẹp kỳ vĩ của vịnh Hạ Long trên du thuyền 5 sao đẳng cấp.', createdAt: new Date().toISOString() },
+            { id: 's2', name: 'Khách sạn Mường Thanh Grand', category: 'hotel', location: 'Đà Nẵng', price: 1800000, unit: 'đêm', status: 'active', rating: 4.5, bookings: 87, image: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=600&q=80', desc: 'Vị trí đắc địa gần bãi biển Mỹ Khê, phòng ốc hiện đại và dịch vụ tận tâm.', createdAt: new Date().toISOString() },
+            { id: 's3', name: 'Nhà hàng Bếp Việt Hội An', category: 'restaurant', location: 'Hội An', price: 350000, unit: 'người', status: 'active', rating: 4.7, bookings: 203, image: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600&q=80', desc: 'Thưởng thức tinh hoa ẩm thực phố cổ trong không gian hoài niệm.', createdAt: new Date().toISOString() },
+            { id: 's4', name: 'Tour Sapa Trekking 3N2Đ', category: 'tour', location: 'Lào Cai', price: 3200000, unit: 'người', status: 'pending', rating: 0, bookings: 0, image: 'https://images.unsplash.com/photo-1501854140801-50d01698950b?w=600&q=80', desc: 'Trải nghiệm văn hóa bản địa và chinh phục đỉnh Fansipan hùng vĩ.', createdAt: new Date().toISOString() },
+            { id: 's5', name: 'Nghỉ dưỡng Phú Quốc 5 Sao', category: 'hotel', location: 'Phú Quốc', price: 4500000, unit: 'đêm', status: 'paused', rating: 4.9, bookings: 56, image: 'https://images.unsplash.com/photo-1540202404-a2f29016b523?w=600&q=80', desc: 'Thiên đường nghỉ dưỡng riêng tư với bãi biển riêng và hồ bơi vô cực.', createdAt: new Date().toISOString() },
         ];
         save(samples);
     }
@@ -212,13 +212,14 @@
             document.getElementById('sm-form-price').value = svc.price || '';
             document.getElementById('sm-form-unit').value = svc.unit || 'người';
             document.getElementById('sm-form-image').value = svc.image || '';
+            document.getElementById('sm-form-desc').value = svc.desc || '';
             document.getElementById('sm-modal-wrapper').classList.add('active');
         },
 
         add() {
             state.editingId = null;
             document.getElementById('sm-modal-title').textContent = '✨ Thêm dịch vụ mới';
-            ['sm-form-name','sm-form-location','sm-form-price','sm-form-image'].forEach(id => {
+            ['sm-form-name','sm-form-location','sm-form-price','sm-form-image','sm-form-desc'].forEach(id => {
                 const el = document.getElementById(id); if (el) el.value = '';
             });
             document.getElementById('sm-form-category').value = 'tour';
@@ -238,6 +239,7 @@
             const price = priceRaw === '' ? null : Number(priceRaw);
             const unit = document.getElementById('sm-form-unit').value;
             const image = document.getElementById('sm-form-image').value.trim();
+            const desc = document.getElementById('sm-form-desc').value.trim();
 
             if (!name || !location) {
                 toast('⚠️ Vui lòng điền Tên và Địa điểm!', 'error'); return;
@@ -246,10 +248,10 @@
             const list = load();
             if (state.editingId) {
                 const idx = list.findIndex(s => s.id === state.editingId);
-                if (idx >= 0) Object.assign(list[idx], { name, category, location, price, unit, image });
+                if (idx >= 0) Object.assign(list[idx], { name, category, location, price, unit, image, desc });
                 toast('Cập nhật thành công');
             } else {
-                list.unshift({ id: genId(), name, category, location, price, unit, image, status: 'pending', rating: 0, bookings: 0, createdAt: new Date().toISOString() });
+                list.unshift({ id: genId(), name, category, location, price, unit, image, desc, status: 'pending', rating: 0, bookings: 0, createdAt: new Date().toISOString() });
                 toast('Tạo dịch vụ thành công');
             }
             save(list);
@@ -317,6 +319,10 @@
                         <div class="sm-form-group full">
                             <label class="sm-form-label">Link ảnh đại diện (Tùy chọn)</label>
                             <input type="text" id="sm-form-image" class="sm-form-control" placeholder="https://...">
+                        </div>
+                        <div class="sm-form-group full">
+                            <label class="sm-form-label">Mô tả ngắn</label>
+                            <textarea id="sm-form-desc" class="sm-form-control" style="height:100px;resize:none" placeholder="Nhập mô tả hấp dẫn để thu hút khách hàng..."></textarea>
                         </div>
                     </div>
                     <div class="sm-modal-actions">

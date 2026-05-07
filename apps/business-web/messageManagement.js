@@ -282,4 +282,79 @@
         }
     };
 
+    // ── Dedicated AI View ────────────────────────────────────────
+    window.initAIChat = function() {
+        const container = document.getElementById('ai-chat-container');
+        if (!container) return;
+        
+        container.innerHTML = `
+            <div class="msg-mgmt-container" style="height:600px">
+                <div class="chat-main" style="border:none">
+                    <div class="chat-header">
+                        <div style="display:flex; align-items:center; gap:18px;">
+                            <div style="font-size:32px; background:#eef2ff; padding:10px; border-radius:15px">👩‍💼</div>
+                            <div>
+                                <div style="font-weight:900; color:#1e1b4b; font-size:18px;">Trợ lý Tư vấn Chuyên nghiệp</div>
+                                <div style="font-size:12px; color:#10b981; font-weight:700;">Hỗ trợ 24/7 bằng Trí tuệ nhân tạo ⚡</div>
+                            </div>
+                        </div>
+                        <button onclick="localStorage.removeItem('${HISTORY_KEY}'); aiSession={step:'idle',data:{}}; window.initAIChat();" style="font-size:12px; font-weight:700; color:#ef4444; background:#fef2f2; border:none; padding:10px 20px; border-radius:12px; cursor:pointer;">Làm mới cuộc hội thoại</button>
+                    </div>
+                    <div class="chat-messages" id="ai-chat-messages-container" style="padding:30px"></div>
+                    <div class="chat-input-area" style="background:#fff; border-top:1px solid #f1f5f9">
+                        <input type="text" placeholder="Hỏi em về tour, phòng hoặc giá cả..." id="ai-chat-input-field" class="chat-input" style="border-radius:15px; background:#f8fafc">
+                        <button onclick="window.handleSendAIMessage()" class="btn-send" style="border-radius:15px">➤</button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        window.handleSendAIMessage = function() {
+            const input = document.getElementById('ai-chat-input-field');
+            if (!input) return;
+            const content = input.value.trim();
+            if (!content) return;
+
+            const msgs = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+            msgs.push({ id: Date.now(), conversationId: AI_BOT_ID, sender: 'business', content, time: nowStr() });
+            localStorage.setItem(HISTORY_KEY, JSON.stringify(msgs));
+            input.value = '';
+            renderAIMessages();
+
+            setTimeout(() => {
+                const reply = getBotReply(content);
+                const msgs2 = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+                msgs2.push({ id: 'ai-' + Date.now(), conversationId: AI_BOT_ID, sender: 'customer', content: reply, time: nowStr() });
+                localStorage.setItem(HISTORY_KEY, JSON.stringify(msgs2));
+                renderAIMessages();
+            }, 1000);
+        };
+
+        function renderAIMessages() {
+            const msgs = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]').filter(m => m.conversationId === AI_BOT_ID);
+            const containerMsgs = document.getElementById('ai-chat-messages-container');
+            if (!containerMsgs) return;
+
+            if (msgs.length === 0) {
+                msgs.push({ conversationId: AI_BOT_ID, sender: 'customer', content: 'Chào bạn! Em là trợ lý ảo WanderViệt. Em có thể giúp bạn tìm hiểu về các dịch vụ du lịch, báo giá hoặc hỗ trợ đặt phòng. Bạn cần em giúp gì ạ?', time: 'Hệ thống' });
+            }
+
+            containerMsgs.innerHTML = msgs.map(m => `
+                <div class="bubble ${m.sender === 'customer' ? 'bubble-in bubble-ai' : 'bubble-out'}" style="margin-bottom:15px">
+                    ${m.content}
+                    <div style="font-size:9.5px; opacity:0.6; margin-top:8px; text-align:right; font-weight:600;">${m.time}</div>
+                </div>
+            `).join('');
+            
+            containerMsgs.scrollTop = containerMsgs.scrollHeight;
+        }
+
+        renderAIMessages();
+        const inp = document.getElementById('ai-chat-input-field');
+        if (inp) {
+            inp.focus();
+            inp.addEventListener('keypress', (e) => { if (e.key === 'Enter') window.handleSendAIMessage(); });
+        }
+    };
+
 })();

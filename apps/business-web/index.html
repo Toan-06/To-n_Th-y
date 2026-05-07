@@ -97,8 +97,12 @@ nav{flex:1;padding:10px 0}
 }
 .biz-view { animation: fadeInUp 0.5s ease-out forwards; }
 
-/* Services Grid (Inherited from business-design.css usually, but redefined for safety) */
+/* Services Grid */
 .svc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 24px; }
+
+/* Navigation Headers */
+.nav-header { padding: 20px 18px 8px; font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 1.5px; }
+.nav-header:first-child { padding-top: 10px; }
 
 </style>
 </head>
@@ -119,13 +123,21 @@ nav{flex:1;padding:10px 0}
     </div>
   </div>
   <nav id="main-nav">
-    <a class="nav-item active" href="#" data-view="home">🏠 <span>Trang chủ</span></a>
+    <div class="nav-header">🌍 Giao diện Website</div>
+    <a class="nav-item active" href="#" data-view="public-home">✨ <span>Trang chủ Website</span></a>
+    <a class="nav-item" href="#" data-view="reviews">⭐ <span>Đánh giá khách hàng</span></a>
+
+    <div class="nav-header">📊 Quản trị kinh doanh</div>
+
     <a class="nav-item" href="#" data-view="services">⚙️ <span>Quản lý dịch vụ</span></a>
-    <a class="nav-item" href="#" data-view="bookings">📋 <span>Đơn hàng</span></a>
-    <a class="nav-item" href="#" data-view="messages">💬 <span>Chăm sóc khách hàng</span></a>
-    <a class="nav-item" href="#" data-view="reviews">⭐ <span>Đánh giá</span></a>
+    <a class="nav-item" href="#" data-view="bookings">📋 <span>Quản lý đơn hàng</span></a>
+    <a class="nav-item" href="#" data-view="messages">💬 <span>Tin nhắn CSKH</span></a>
+    <a class="nav-item" href="#" data-view="user-activity">👥 <span>Hoạt động người dùng</span></a>
+    <a class="nav-item" href="#" data-view="business-performance">📊 <span>Hiệu suất kinh doanh</span></a>
+    
+    <div class="nav-header">⚙️ Hệ thống</div>
     <a class="nav-item" href="#" data-view="profile">🏢 <span>Hồ sơ DN</span></a>
-    <a class="nav-item" href="#" data-view="support">🆘 <span>Hỗ trợ</span></a>
+    <a class="nav-item" href="#" data-view="support">🆘 <span>Hỗ trợ Admin</span></a>
   </nav>
   <div class="logout">
     <button onclick="window.bizLogout()">🚪 <span>Đăng xuất</span></button>
@@ -147,7 +159,14 @@ nav{flex:1;padding:10px 0}
   </div>
 
   <!-- View Containers -->
-  <div id="home-view" class="biz-view">
+  <div id="public-home-view" class="biz-view" style="display:none">
+    <div style="text-align:center;padding:100px;color:#94a3b8">
+        <div class="spinner"></div>
+        <p>Đang tải giao diện website...</p>
+    </div>
+  </div>
+
+  <div id="home-view" class="biz-view" style="display:none">
     <div style="padding: 24px;" id="overview-container">
       <div style="text-align:center;padding:60px;color:#94a3b8">
         <div style="font-size:36px;margin-bottom:12px">⏳</div>
@@ -192,6 +211,20 @@ nav{flex:1;padding:10px 0}
             <div style="font-size: 40px; margin-bottom: 16px;">💬</div>
             <h2>Đang tải tin nhắn khách hàng...</h2>
         </div>
+    </div>
+  </div>
+
+  <div id="user-activity-view" class="biz-view" style="display:none">
+    <div style="text-align:center;padding:100px;color:#94a3b8">
+        <div class="spinner"></div>
+        <p>Đang tải dữ liệu người dùng...</p>
+    </div>
+  </div>
+
+  <div id="business-performance-view" class="biz-view" style="display:none">
+    <div style="text-align:center;padding:100px;color:#94a3b8">
+        <div class="spinner"></div>
+        <p>Đang tải dữ liệu hiệu suất...</p>
     </div>
   </div>
 
@@ -258,7 +291,9 @@ nav{flex:1;padding:10px 0}
 <script src="mockData.js?v=5"></script>
 <script src="biz-extend.js?v=5"></script>
 <script src="chatBox.js?v=5"></script>
-<script src="businessOverview.js?v=5"></script>
+<script src="publicHomepage.js?v=6"></script>
+<script src="userAnalytics.js?v=6"></script>
+<script src="businessOverview.js?v=6"></script>
 <script src="serviceManagement.js?v=5"></script>
 <script src="reviewManagement.js?v=5"></script>
 <script src="bookingManagement.js?v=5"></script>
@@ -268,17 +303,16 @@ nav{flex:1;padding:10px 0}
 
 <script>
   document.addEventListener('DOMContentLoaded', async function() {
-    // Restore the last active view from localStorage, default to 'overview'
-    const lastView = localStorage.getItem('biz_active_view') || 'home';
-    
-    if (typeof window.showView === 'function') {
-        window.showView(lastView);
-    } else if (typeof window.navigateToView === 'function') {
-        window.navigateToView(lastView);
-    } else {
-        // Fallback if biz-extend.js is not loaded
-        if (window.initOverview) window.initOverview();
+    // Restore the last active view from localStorage, default to 'public-home'
+    const lastView = localStorage.getItem('biz_active_view') || 'public-home';
+    if (window.navigateToView) {
+        setTimeout(() => window.navigateToView(lastView), 100);
     }
+
+    var token = localStorage.getItem('biz_auth_token') ||
+                sessionStorage.getItem('biz_auth_token') ||
+                localStorage.getItem('wander_business_token') ||
+                sessionStorage.getItem('wander_business_token');
 
     var token = localStorage.getItem('biz_auth_token') ||
                 sessionStorage.getItem('biz_auth_token') ||

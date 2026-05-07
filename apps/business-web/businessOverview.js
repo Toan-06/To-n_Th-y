@@ -26,19 +26,7 @@
         ];
     }
 
-    const activities = [
-        { icon: '📅', text: 'Nguyễn Văn A đã đặt Tour Hạ Long',     time: '2 phút trước' },
-        { icon: '💬', text: 'Bạn có 2 tin nhắn mới',                 time: '15 phút trước' },
-        { icon: '⭐', text: 'Có 3 đánh giá mới từ khách hàng',       time: '1 giờ trước' },
-        { icon: '📅', text: 'Trần Thị B đã đặt Khách sạn Đà Nẵng',  time: '2 giờ trước' },
-        { icon: '✅', text: 'Đơn hàng #1042 đã được xác nhận',       time: '3 giờ trước' },
-    ];
-
-    const messages = [
-        { user: 'Nguyễn Văn A', av: 'N', color: '#6366f1', text: 'Cho mình hỏi giá tour Hạ Long 2 người?', time: '5p', unread: true },
-        { user: 'Trần Thị B',   av: 'T', color: '#ec4899', text: 'Còn phòng không ạ?', time: '30p', unread: true },
-        { user: 'Lê Minh C',    av: 'L', color: '#f59e0b', text: 'Tour có bao gồm bữa ăn không?', time: '2h', unread: false },
-    ];
+    // Data will be fetched from API
 
     const reviews = [
         { user: 'Hoàng Văn E', av: 'H', rating: 5, text: 'Tuyệt vời! Trải nghiệm khó quên.', svc: 'Tour Hạ Long', time: '1 ngày trước' },
@@ -126,22 +114,22 @@
             </div>
 
             <!-- KPI Cards -->
-            <div class="hp-kpis">
+            <div class="hp-kpis" id="dashboard-kpis">
                 <div class="hp-kpi">
                     <div class="hp-kpi-icon" style="background:#fef3c7">💰</div>
-                    <div><div class="hp-kpi-val" style="color:#d97706">4.2M đ</div><div class="hp-kpi-lbl">Doanh thu hôm nay</div></div>
+                    <div><div class="hp-kpi-val" id="stat-revenue" style="color:#d97706">...</div><div class="hp-kpi-lbl">Doanh thu hôm nay</div></div>
                 </div>
                 <div class="hp-kpi">
                     <div class="hp-kpi-icon" style="background:#dcfce7">📈</div>
-                    <div><div class="hp-kpi-val" style="color:#059669">12</div><div class="hp-kpi-lbl">Đơn hàng hôm nay</div></div>
+                    <div><div class="hp-kpi-val" id="stat-bookings" style="color:#059669">...</div><div class="hp-kpi-lbl">Đơn hàng hôm nay</div></div>
                 </div>
                 <div class="hp-kpi">
                     <div class="hp-kpi-icon" style="background:#e0e7ff">💬</div>
-                    <div><div class="hp-kpi-val" style="color:#4f46e5">2</div><div class="hp-kpi-lbl">Tin nhắn mới</div></div>
+                    <div><div class="hp-kpi-val" id="stat-messages" style="color:#4f46e5">...</div><div class="hp-kpi-lbl">Tin nhắn mới</div></div>
                 </div>
                 <div class="hp-kpi">
                     <div class="hp-kpi-icon" style="background:#f1f5f9">🏨</div>
-                    <div><div class="hp-kpi-val" style="color:#475569">${activeSvcs}</div><div class="hp-kpi-lbl">Dịch vụ đang chạy</div></div>
+                    <div><div class="hp-kpi-val" id="stat-services" style="color:#475569">...</div><div class="hp-kpi-lbl">Dịch vụ đang chạy</div></div>
                 </div>
             </div>
 
@@ -165,16 +153,8 @@
                             <div class="hp-card-title">🕒 Hoạt động gần đây</div>
                             <span class="hp-card-link" onclick="window.navigateToView('bookings')">Xem tất cả →</span>
                         </div>
-                        <div class="hp-card-body">
-                            ${activities.map(a => `
-                                <div class="hp-list-item">
-                                    <div style="font-size:20px;width:40px;height:40px;display:flex;align-items:center;justify-content:center;background:#f8fafc;border-radius:10px">${a.icon}</div>
-                                    <div style="flex:1">
-                                        <div class="hp-list-text">${a.text}</div>
-                                        <div class="hp-list-sub">${a.time}</div>
-                                    </div>
-                                </div>
-                            `).join('')}
+                        <div class="hp-card-body" id="activities-container">
+                            <div style="text-align:center;padding:2rem;color:#94a3b8">Đang tải hoạt động...</div>
                         </div>
                     </div>
 
@@ -207,20 +187,8 @@
                             <div class="hp-card-title">💬 Chăm sóc khách hàng</div>
                             <span class="hp-card-link" onclick="window.navigateToView('messages')">Phòng chat →</span>
                         </div>
-                        <div class="hp-card-body">
-                            ${messages.map(m => `
-                                <div class="hp-list-item">
-                                    <div class="hp-list-av" style="background:${m.color}">${m.av}</div>
-                                    <div style="flex:1">
-                                        <div style="display:flex;justify-content:space-between">
-                                            <div class="hp-list-text">${m.user}</div>
-                                            <div style="font-size:10px;color:#94a3b8">${m.time}</div>
-                                        </div>
-                                        <div class="hp-list-sub" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;${m.unread ? 'font-weight:700;color:#1e293b' : ''}">${m.text}</div>
-                                    </div>
-                                    ${m.unread ? '<div style="width:8px;height:8px;border-radius:50%;background:#6366f1"></div>' : ''}
-                                </div>
-                            `).join('')}
+                        <div class="hp-card-body" id="dashboard-messages">
+                            <div style="text-align:center;padding:1rem;color:#94a3b8">Đang tải tin nhắn...</div>
                         </div>
                     </div>
 
@@ -229,18 +197,8 @@
                             <div class="hp-card-title">⭐ Đánh giá mới nhất</div>
                             <span class="hp-card-link" onclick="window.navigateToView('reviews')">Tất cả →</span>
                         </div>
-                        <div class="hp-card-body">
-                            ${reviews.map(r => `
-                                <div class="hp-list-item" style="flex-direction:column;align-items:flex-start;gap:4px">
-                                    <div style="display:flex;justify-content:space-between;width:100%">
-                                        <div style="font-size:13px;font-weight:700;color:#334155">${r.user}</div>
-                                        <div style="font-size:11px;color:#94a3b8">${r.time}</div>
-                                    </div>
-                                    <div>${stars(r.rating)}</div>
-                                    <div style="font-size:13px;color:#64748b;line-height:1.4;font-style:italic">"${r.text}"</div>
-                                    <div style="font-size:11px;font-weight:700;color:#6366f1;background:#f5f3ff;padding:2px 8px;border-radius:4px;margin-top:4px">${r.svc}</div>
-                                </div>
-                            `).join('')}
+                        <div class="hp-card-body" id="hp-reviews-list">
+                            <div style="text-align:center;padding:1rem;color:#94a3b8">Đang tải đánh giá...</div>
                         </div>
                     </div>
                 </div>
@@ -321,8 +279,146 @@
         container.innerHTML = render();
         updateIdentity();
         
+        // Load Real Data from API
+        loadDashboardStats();
+        loadDashboardActivities();
+        loadRealReviews();
+        loadRealMessages();
+
         // Cần chờ DOM render xong để vẽ Chart
         setTimeout(initChart, 50);
     };
+
+    function loadDashboardStats() {
+        fetch('http://localhost:5000/api/dashboard/summary', {
+            headers: { 'x-auth-token': localStorage.getItem('biz_auth_token') || localStorage.getItem('wander_token') }
+        })
+        .then(r => r.json())
+        .then(json => {
+            if (json.success && json.data) {
+                const d = json.data;
+                const revEl = document.getElementById('stat-revenue');
+                const bookEl = document.getElementById('stat-bookings');
+                const msgEl = document.getElementById('stat-messages');
+                const svcEl = document.getElementById('stat-services');
+                
+                if (revEl) revEl.textContent = formatMoney(d.revenueToday);
+                if (bookEl) bookEl.textContent = d.bookingsToday;
+                if (msgEl) msgEl.textContent = d.newMessages;
+                if (svcEl) svcEl.textContent = d.activeServices;
+            }
+        });
+    }
+
+    function timeSince(date) {
+        const seconds = Math.floor((new Date() - new Date(date)) / 1000);
+        let interval = seconds / 31536000;
+        if (interval > 1) return Math.floor(interval) + " năm trước";
+        interval = seconds / 2592000;
+        if (interval > 1) return Math.floor(interval) + " tháng trước";
+        interval = seconds / 86400;
+        if (interval > 1) return Math.floor(interval) + " ngày trước";
+        interval = seconds / 3600;
+        if (interval > 1) return Math.floor(interval) + " giờ trước";
+        interval = seconds / 60;
+        if (interval > 1) return Math.floor(interval) + " phút trước";
+        return Math.floor(seconds) + " giây trước";
+    }
+
+    function loadDashboardActivities() {
+        const container = document.getElementById('activities-container');
+        if (!container) return;
+
+        fetch('http://localhost:5000/api/dashboard/activities', {
+            headers: { 'x-auth-token': localStorage.getItem('biz_auth_token') || localStorage.getItem('wander_token') }
+        })
+        .then(r => r.json())
+        .then(json => {
+            const list = json.success && json.data ? json.data : [];
+            if (list.length === 0) {
+                container.innerHTML = '<div style="text-align:center;padding:2rem;color:#94a3b8;font-size:13px">Chưa có hoạt động nào.</div>';
+                return;
+            }
+
+            container.innerHTML = list.map(a => `
+                <div class="hp-list-item">
+                    <div style="font-size:20px;width:40px;height:40px;display:flex;align-items:center;justify-content:center;background:#f8fafc;border-radius:10px">${a.icon}</div>
+                    <div style="flex:1">
+                        <div class="hp-list-text">${a.text}</div>
+                        <div class="hp-list-sub">${timeSince(a.time)}</div>
+                    </div>
+                </div>
+            `).join('');
+        });
+    }
+
+    function loadRealMessages() {
+        const container = document.getElementById('dashboard-messages');
+        if (!container) return;
+
+        fetch('http://localhost:5000/api/messages', {
+            headers: { 'x-auth-token': localStorage.getItem('biz_auth_token') || localStorage.getItem('wander_token') }
+        })
+        .then(r => r.json())
+        .then(json => {
+            const list = json.success && json.data ? json.data : [];
+            if (list.length === 0) {
+                container.innerHTML = '<div style="text-align:center;padding:1.5rem;color:#94a3b8;font-size:13px">Không có tin nhắn.</div>';
+                return;
+            }
+
+            container.innerHTML = list.slice(0, 3).map(m => {
+                const av = (m.sender && m.sender.name ? m.sender.name.charAt(0) : 'K').toUpperCase();
+                return `
+                <div class="hp-list-item" onclick="window.navigateToView('messages')" style="cursor:pointer">
+                    <div class="hp-list-av" style="background:#6366f1">${av}</div>
+                    <div style="flex:1">
+                        <div style="display:flex;justify-content:space-between">
+                            <div class="hp-list-text">${m.sender ? m.sender.name : 'Khách hàng'}</div>
+                            <div style="font-size:10px;color:#94a3b8">${timeSince(m.createdAt)}</div>
+                        </div>
+                        <div class="hp-list-sub" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;">${m.content || ''}</div>
+                    </div>
+                </div>
+                `;
+            }).join('');
+        });
+    }
+
+    function loadRealReviews() {
+        const container = document.getElementById('hp-reviews-list');
+        if (!container) return;
+
+        // Use the same API endpoint as biz-extend.js
+        fetch('/api/business/reviews', {
+            headers: { 'x-auth-token': localStorage.getItem('biz_auth_token') || localStorage.getItem('wander_business_token') }
+        })
+        .then(r => r.json())
+        .then(json => {
+            const list = json.success && json.data ? json.data : [];
+            if (list.length === 0) {
+                container.innerHTML = '<div style="text-align:center;padding:2rem;color:#94a3b8;font-size:13px">Chưa có đánh giá nào.</div>';
+                return;
+            }
+
+            container.innerHTML = list.slice(0, 3).map(r => {
+                const timeStr = r.createdAt ? new Date(r.createdAt).toLocaleDateString('vi-VN') : 'Gần đây';
+                return `
+                    <div class="hp-list-item" style="flex-direction:column;align-items:flex-start;gap:4px">
+                        <div style="display:flex;justify-content:space-between;width:100%">
+                            <div style="font-size:13px;font-weight:700;color:#334155">${r.userName || 'Khách hàng'}</div>
+                            <div style="font-size:11px;color:#94a3b8">${timeStr}</div>
+                        </div>
+                        <div>${stars(r.rating)}</div>
+                        <div style="font-size:13px;color:#64748b;line-height:1.4;font-style:italic">"${r.text || r.comment || ''}"</div>
+                        <div style="font-size:11px;font-weight:700;color:#6366f1;background:#f5f3ff;padding:2px 8px;border-radius:4px;margin-top:4px">${r.placeName || 'Dịch vụ'}</div>
+                    </div>
+                `;
+            }).join('');
+        })
+        .catch(() => {
+            container.innerHTML = '<div style="text-align:center;padding:1rem;color:#ef4444;font-size:12px">Lỗi tải đánh giá.</div>';
+        });
+    }
 
 })();

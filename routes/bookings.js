@@ -3,7 +3,8 @@ const router = express.Router();
 const Booking = require('../models/Booking');
 const Transaction = require('../models/Transaction');
 const Place = require('../models/Place');
-const { auth, businessAuth } = require('./auth');
+const { auth, businessAuth, sharedAuth } = require('./auth');
+const User = require('../models/User');
 
 // 1. User: Create a booking (service OR tour)
 router.post('/', auth, async (req, res) => {
@@ -64,6 +65,26 @@ router.post('/', auth, async (req, res) => {
   }
 });
 
+// New unified GET / route for both users and business
+router.get('/', sharedAuth, async (req, res) => {
+  try {
+    let query = {};
+    if (req.user.role === 'business') {
+      query = { ownerId: req.user.id };
+    } else if (req.user.role === 'admin' || req.user.role === 'superadmin') {
+      query = {}; // Admins can see all
+    } else {
+      query = { userId: req.user.id };
+    }
+    
+    // Sort by most recent
+    const bookings = await Booking.find(query).sort({ createdAt: -1 });
+    res.json({ success: true, data: bookings });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Lỗi tải đơn hàng: ' + err.message });
+  }
+});
+
 // 2. User: Get my bookings
 router.get('/my', auth, async (req, res) => {
   try {
@@ -89,6 +110,36 @@ router.put('/:id/cancel', auth, async (req, res) => {
     res.json({ success: true, data: booking, message: 'Đã hủy đặt lịch' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// New unified PUT /:id route for status updates
+router.put('/:id', sharedAuth, async (req, res) => {
+  try {
+    const { status, notes } = req.body;
+    let query = { _id: req.params.id };
+    
+    // If business, ensure they own the booking
+    if (req.user.role === 'business') {
+      query.ownerId = req.user.id;
+    } else if (req.user.role !== 'admin' && req.user.role !== 'superadmin') {
+      // Users can only cancel their own bookings
+      query.userId = req.user.id;
+      if (status !== 'cancelled') {
+        return res.status(403).json({ success: false, message: 'Bạn chỉ có quyền hủy đơn hàng của mình.' });
+      }
+    }
+
+    const update = {};
+    if (status) update.status = status;
+    if (notes !== undefined) update.notes = notes;
+
+    const booking = await Booking.findOneAndUpdate(query, update, { new: true });
+    if (!booking) return res.status(404).json({ success: false, message: 'Không tìm thấy đơn hàng hoặc bạn không có quyền thao tác.' });
+    
+    res.json({ success: true, data: booking });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Lỗi cập nhật đơn hàng: ' + err.message });
   }
 });
 

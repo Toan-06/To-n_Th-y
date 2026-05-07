@@ -8,20 +8,33 @@ exports.protect = async (req, res, next) => {
         
         if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
             token = req.headers.authorization.split(' ')[1];
+        } else if (req.header('x-auth-token')) {
+            token = req.header('x-auth-token');
         }
 
         if (!token) {
             return res.status(401).json({ success: false, message: 'Không có quyền truy cập (Missing token)' });
         }
 
-        // Dùng cùng secret với backend cũ (routes/auth.js) để token tương thích 2 chiều
+        // Dùng cùng secret với backend cũ (routes/auth.js) để token tương thích
         const decoded = jwt.verify(token, process.env.JWT_SECRET || 'wander-viet-secret-key-123');
         
-        // Tìm user trong DB mới; nếu không thấy (user ở DB cũ), dùng decoded payload
-        let user = await User.findById(decoded.id).catch(() => null);
+        // Trích xuất thông tin user từ payload (hỗ trợ cả format cũ và mới)
+        const userData = decoded.user || decoded.account || decoded;
+        const userId = userData.id || userData._id;
+
+        // Tìm user trong DB để đảm bảo user vẫn tồn tại và lấy role mới nhất
+        let user = await User.findById(userId).catch(() => null);
+        
         if (!user) {
-            // Token hợp lệ nhưng user chưa có trong DB mới — chấp nhận, gán dữ liệu từ payload
-            user = { _id: decoded.id, id: decoded.id, role: decoded.role || 'business', name: decoded.name || '' };
+            // Fallback cho tài khoản doanh nghiệp cũ (Legacy) hoặc user chưa migrate
+            req.user = {
+                id: userId,
+                _id: userId,
+                role: userData.role || decoded.role || 'business',
+                name: userData.name || decoded.name || 'Doanh nghiệp'
+            };
+            return next();
         }
         req.user = user;
         

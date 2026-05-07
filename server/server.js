@@ -25,6 +25,7 @@ const bookings = require('./routes/booking.routes');
 const reviews = require('./routes/review.routes');
 const messages = require('./routes/message.routes');
 const preferences = require('./routes/preference.routes');
+const dashboard = require('./routes/dashboard.routes');
 
 // Mount routers
 app.use('/api/auth', auth);
@@ -33,6 +34,7 @@ app.use('/api/bookings', bookings);
 app.use('/api/reviews', reviews);
 app.use('/api/messages', messages);
 app.use('/api/preferences', preferences);
+app.use('/api/dashboard', dashboard);
 
 // Root endpoint
 app.get('/', (req, res) => {

@@ -7,23 +7,50 @@ const { sendResponse } = require('../utils/format');
 // @access  Private (User only)
 exports.createBooking = async (req, res, next) => {
     try {
-        const { serviceId, date, totalPrice } = req.body;
+        const { serviceId, placeId, date, useDate, tourDate, totalPrice, customerName, customerPhone, peopleCount, paymentMethod, specialRequests, bookingType } = req.body;
 
-        const service = await Service.findById(serviceId);
-        if (!service) return res.status(404).json({ success: false, message: 'Dịch vụ không tồn tại' });
+        const sId = serviceId || placeId;
+        const dDate = date || useDate || tourDate;
+
+        if (!sId) {
+            return res.status(400).json({ success: false, message: 'Vui lòng cung cấp ID dịch vụ' });
+        }
+
+        let service;
+        const isObjectId = /^[0-9a-fA-F]{24}$/.test(sId);
+
+        if (isObjectId) {
+            service = await Service.findById(sId);
+        } else {
+            // Thử tìm theo legacyId nếu ID gửi lên không phải là ObjectId
+            service = await Service.findOne({ legacyId: sId });
+        }
+
+        if (!service) {
+            return res.status(404).json({ success: false, message: 'Dịch vụ không tồn tại hoặc chưa được ánh xạ hệ thống mới' });
+        }
+
+        const count = peopleCount || 1;
+        const calculatedPrice = totalPrice || (service.price * count);
 
         const booking = await Booking.create({
             user: req.user.id,
-            service: serviceId,
-            date,
-            totalPrice
+            service: service._id, // Luôn lưu theo ObjectId mới
+            date: dDate,
+            totalPrice: calculatedPrice,
+            customerName: customerName || req.user.name,
+            customerPhone: customerPhone || '',
+            peopleCount: count,
+            paymentMethod: paymentMethod || 'contact',
+            specialRequests: specialRequests || '',
+            bookingType: bookingType || 'service'
         });
 
         // Automatically increment bookings count in Service model
         service.bookings += 1;
         await service.save();
 
-        sendResponse(res, 201, booking);
+        sendResponse(res, 201, { bookingId: booking._id, ...booking._doc });
     } catch (err) {
         next(err);
     }
@@ -38,10 +65,15 @@ exports.getBookings = async (req, res, next) => {
 
         // If user is 'business', get bookings for their services. Otherwise get user's own bookings
         if (req.user.role === 'business') {
+            // Cho phép tìm kiếm kể cả khi ID là chuỗi (Legacy)
             const services = await Service.find({ owner: req.user.id }).select('_id');
             const serviceIds = services.map(s => s._id);
             query = Booking.find({ service: { $in: serviceIds } }).populate('user', 'name email').populate('service', 'name location');
         } else {
+            const isObjectId = /^[0-9a-fA-F]{24}$/.test(req.user.id);
+            if (!isObjectId) {
+                return sendResponse(res, 200, []);
+            }
             query = Booking.find({ user: req.user.id }).populate('service', 'name location price image');
         }
 

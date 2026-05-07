@@ -39,6 +39,10 @@ const serviceSchema = new mongoose.Schema({
         type: mongoose.Schema.ObjectId,
         ref: 'User',
         required: true
+    },
+    legacyId: {
+        type: String,
+        index: true
     }
 }, {
     timestamps: true

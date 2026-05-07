@@ -751,7 +751,8 @@
           paymentMethod: pmVal ? pmVal.value : 'contact',
           bookingType: document.getElementById('bk-is-tour').value==='1'?'tour':'service'
         };
-        fetch('/api/bookings', {
+        // Gửi đơn hàng sang New API (Port 5000) để đồng bộ với Business Dashboard
+        fetch('http://localhost:5000/api/bookings', {
           method:'POST',
           headers:{'Content-Type':'application/json','x-auth-token':token},
           body:JSON.stringify(payload)
@@ -760,19 +761,21 @@
             btn.disabled=false; btn.textContent='🚀 XÁC NHẬN ĐẶT CHỖ';
             if (json.success) {
               closeBookingModal();
-              if (window.WanderUI) window.WanderUI.showToast('✅ Đặt thành công! Mã: '+json.data.bookingId,'success');
-              else alert('✅ Đặt thành công! Mã đơn: ' + json.data.bookingId);
+              var bId = json.data.bookingId || json.data._id;
+              if (window.WanderUI) window.WanderUI.showToast('✅ Đặt thành công! Mã: ' + bId,'success');
+              else alert('✅ Đặt thành công! Mã đơn: ' + bId);
               
               if (pmVal && pmVal.value !== 'contact') {
-                setTimeout(function() { window.location.href = 'payment.html?pay=' + json.data.bookingId; }, 1000);
+                setTimeout(function() { window.location.href = 'payment.html?pay=' + bId; }, 1000);
               }
             } else {
               errEl.textContent = json.message || 'Đặt thất bại, vui lòng thử lại.';
               errEl.style.display='block';
             }
-          }).catch(function(){
+          }).catch(function(err){
+            console.error('Booking error:', err);
             btn.disabled=false; btn.textContent='🚀 XÁC NHẬN ĐẶT CHỖ';
-            errEl.textContent='Lỗi kết nối. Vui lòng thử lại.';
+            errEl.textContent='Lỗi kết nối tới hệ thống đặt chỗ mới. Vui lòng thử lại.';
             errEl.style.display='block';
           });
       });
