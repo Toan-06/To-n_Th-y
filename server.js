@@ -24,7 +24,16 @@ app.use(compression()); // Bật nén dữ liệu
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// Ensure uploads directory exists
+const fs = require('fs');
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+    console.log('✅ Created uploads directory');
+}
+
+app.use('/uploads', express.static(uploadsDir));
 
 // Performance & Caching Policy
 app.use((req, res, next) => {
@@ -63,8 +72,17 @@ app.use('/api/payments', require('./routes/payments'));
 
 // Static User Web
 app.use(express.static(path.join(__dirname, 'apps/user-web')));
+
+// Catch-all: If not found, check if it's an API or static file request
 app.use((req, res) => {
-    if (req.path.startsWith('/api/')) return res.status(404).json({ success: false });
+    const isApi = req.path.startsWith('/api/');
+    const isStatic = req.path.startsWith('/uploads/') || req.path.startsWith('/assets/') || path.extname(req.path);
+    
+    if (isApi || isStatic) {
+        return res.status(404).json({ success: false, message: 'Resource not found' });
+    }
+    
+    // Default to SPA entry point
     res.sendFile(path.join(__dirname, 'apps/user-web/index.html'));
 });
 

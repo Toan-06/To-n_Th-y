@@ -648,6 +648,8 @@ router.post('/posts/media', auth, upload.array('media', 5), async (req, res) => 
       let type = 'image';
       if (f.mimetype.startsWith('video')) type = 'video';
       else if (f.mimetype.startsWith('audio')) type = 'audio';
+      
+      console.log(`[Upload] File saved: ${f.filename} (${f.size} bytes) at ${f.path}`);
       return { url: `/uploads/${f.filename}`, type };
     });
     

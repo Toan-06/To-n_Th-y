@@ -1632,7 +1632,17 @@ const SocialHub = {
                     <div class="post-media ${post.mediaLayout ? 'media-layout-' + post.mediaLayout : (post.media.length > 1 ? 'media-grid' : '')}">
                         ${post.media.map((m, i) => {
                             if (m.type === 'image') return `<img src="${m.url}" alt="Ảnh bài viết" onclick="SocialHub.viewImage('${m.url}')" onerror="this.onerror=null; this.src='assets/placeholder-image.svg';">`;
-                            if (m.type === 'video') return `<video src="${m.url}" controls playsinline webkit-playsinline preload="metadata" poster="assets/video-placeholder.jpg" onerror="this.parentElement.innerHTML='<div class=\"media-error\">Không thể tải video</div>'"></video>`;
+                            if (m.type === 'video') return `
+                                <video 
+                                    src="${m.url}" 
+                                    controls 
+                                    playsinline 
+                                    webkit-playsinline 
+                                    preload="metadata" 
+                                    poster="assets/video-placeholder.jpg" 
+                                    style="width: 100%; max-height: 500px; background: #000; border-radius: 8px;"
+                                    onerror="this.style.display='none'; this.insertAdjacentHTML('afterend', '<div class=\'media-error\' style=\'padding: 2rem; background: rgba(0,0,0,0.05); border-radius: 8px; text-align: center;\'><i class=\'fas fa-video-slash\' style=\'display:block; font-size: 2rem; margin-bottom: 0.5rem; color: var(--text-muted);\'></i>Không thể tải video</div>')"
+                                ></video>`;
                             if (m.type === 'audio') return `
                                 <div class="post-audio-card">
                                     <div class="audio-wave"><span></span><span></span><span></span><span></span></div>
